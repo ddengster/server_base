@@ -1,0 +1,40 @@
+{
+  "configurations": [
+  {
+    "name": "C/C++: g++ build and debug active file",
+    "type": "cppdbg",
+    "request": "launch",
+    "program": "${workspaceFolder}/sample/sample",
+    "args": [],
+    "stopAtEntry": true,
+    "preLaunchTask": "make_task",
+    "cwd": "${workspaceFolder}",
+    "environment": [],
+    "externalConsole": false,
+    "MIMode": "gdb",
+    "setupCommands": [
+      {
+        // from https://github.com/microsoft/vscode-cpptools/issues/13667
+        // This fixes the bug where gdb hangs on starting with the error -
+        // warning: GDB: Failed to set controlling terminal: Operation not permitted\n"
+        "description": "Wipe debuginfod URLs to bypass extension bug",
+        "text": "set debuginfod urls ",
+        "ignoreFailures": true
+      },
+      {
+        "description": "Enable pretty-printing for gdb",
+        "text": "-enable-pretty-printing",
+        "ignoreFailures": true
+      },
+      {
+        "description": "Set Disassembly Flavor to Intel",
+        "text": "-gdb-set disassembly-flavor intel",
+        "ignoreFailures": true
+      }
+    ],
+
+    "miDebuggerPath": "/usr/bin/gdb"
+    }
+  ],
+  "version": "2.0.0"
+}

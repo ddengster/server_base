@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "make_task",
+      "type": "shell",
+      "command": "make clean && make all",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$g++"],
+      "detail": "Build project using Makefile"
+    }
+  ]
+}
