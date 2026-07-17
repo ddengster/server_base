@@ -1,6 +1,6 @@
 CXX := g++
 CXXFLAGS := -Wall -Wextra -std=c++17 -g
-TARGET := sample
+TARGET := sample_server
 SRCS := $(wildcard *.cpp *.c)
 
 $(TARGET): $(SRCS)
