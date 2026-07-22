@@ -1,39 +1,50 @@
 {
   "configurations": [
-  {
-    "name": "C/C++: g++ build and debug",
-    "type": "cppdbg",
-    "request": "launch",
-    "program": "${workspaceFolder}/sample_server/sample_server",
-    "args": [],
-    "stopAtEntry": true,
-    "preLaunchTask": "make_task",
-    "cwd": "${workspaceFolder}",
-    "environment": [],
-    "externalConsole": false,
-    "MIMode": "gdb",
-    "setupCommands": [
-      {
-        // from https://github.com/microsoft/vscode-cpptools/issues/13667
-        // This fixes the bug where gdb hangs on starting with the error -
-        // warning: GDB: Failed to set controlling terminal: Operation not permitted\n"
-        "description": "Wipe debuginfod URLs to bypass extension bug",
-        "text": "set debuginfod urls ",
-        "ignoreFailures": true
-      },
-      {
-        "description": "Enable pretty-printing for gdb",
-        "text": "-enable-pretty-printing",
-        "ignoreFailures": true
-      },
-      {
-        "description": "Set Disassembly Flavor to Intel",
-        "text": "-gdb-set disassembly-flavor intel",
-        "ignoreFailures": true
-      }
-    ],
-
-    "miDebuggerPath": "/usr/bin/gdb"
+    {
+      "name": "C/C++: g++ build and debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/sample_server/sample_server",
+      "args": [],
+      "stopAtEntry": true,
+      "preLaunchTask": "make_task",
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          // from https://github.com/microsoft/vscode-cpptools/issues/13667
+          // This fixes the bug where gdb hangs on starting with the error -
+          // warning: GDB: Failed to set controlling terminal: Operation not permitted\n"
+          "description": "Wipe debuginfod URLs to bypass extension bug",
+          "text": "set debuginfod urls ",
+          "ignoreFailures": true
+        },
+        {
+          // stops detach on fork in gdb
+          "description": "follow forked process",
+          "text": "set follow-fork-mode child",
+          "ignoreFailures": true
+        },
+        {
+          // stops detach on fork in gdb
+          "description": "disable detach on fork",
+          "text": "set detach-on-fork off",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set Disassembly Flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
     }
   ],
   "version": "2.0.0"

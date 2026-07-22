@@ -9,7 +9,9 @@
         "kind": "build",
         "isDefault": true
       },
-      "problemMatcher": ["$g++"],
+      "problemMatcher": [
+        "$g++"
+      ],
       "detail": "Build project using Makefile"
     }
   ]
