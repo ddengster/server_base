@@ -4,6 +4,8 @@
 
 #include "os_utils.h"
 
+const char* gProcessName = "sample_server";
+
 int main(int argc, char* argv[])
 {
   printf("process: sample_server, compile date: %s %s\n", __DATE__, __TIME__);
@@ -12,12 +14,12 @@ int main(int argc, char* argv[])
     printf("usage: %s config.json\n", argv[0]);
     exit(EXIT_FAILURE);
   }
-
-  if (process_exist(__process__) != 0)
+  */
+  if (process_exist(gProcessName) != 0)
   {
-    printf("process: %s exist\n", __process__);
+    printf("process: %s exist\n", gProcessName);
     exit(EXIT_FAILURE);
-  }*/
+  }
 
   if (set_process_limits() != 0)
   {
@@ -33,7 +35,7 @@ int main(int argc, char* argv[])
     for () {}*/
 
   daemon(1, 1);  // detach from controlling terminal
-  spawn_process_and_keepalive();
+  fork_process_and_keepalive();
 
   printf("end\n");
   return 0;

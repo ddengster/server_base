@@ -6,11 +6,18 @@
 #include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <signal.h>
 #include <errno.h>
 #include <error.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/file.h>
+#include <limits.h>
 
 int set_process_limits(size_t coredump_filesz_limit, size_t fd_limit)
 {
@@ -47,6 +54,27 @@ int set_process_limits(size_t coredump_filesz_limit, size_t fd_limit)
 
   return 0;
 }
+
+int process_exist(const char* fmt, ...)
+{
+  char name[64] = {};
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(name, sizeof(name), fmt, ap);
+  va_end(ap);
+
+  char path[PATH_MAX] = {};
+  snprintf(path, sizeof(path), "/tmp/%s.lock", name);
+
+  int fd = open(path, O_CREAT, 400);
+  if (fd < 0)
+    return -1;
+  if (flock(fd, LOCK_EX | LOCK_NB) < 0)
+    return 1;
+
+  return 0;
+}
+
 
 int gSignalExit = 0;
 
@@ -133,7 +161,7 @@ void signal_handler(int signo)
   }
 }
 
-int spawn_process_and_keepalive()
+int fork_process_and_keepalive()
 {
   // forks the process. the child process will carry on, while the parent process observes the child
   // process
