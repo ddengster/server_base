@@ -1,3 +1,5 @@
+
+#include "prereqs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,7 +33,7 @@ int main(int argc, char* argv[])
   }
 
   // do initializations here..
-  log_init(fopen_log_file_tdy());
+  log_init("logs", fopen_log_file_tdy());
   /*
     uint worker_count = 4;
     for () {}*/
@@ -39,6 +41,10 @@ int main(int argc, char* argv[])
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
+
   LOG_INFO("end\n");
+
+  // int* a = nullptr;
+  // *a = 12121;
   return 0;
 }

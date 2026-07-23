@@ -6,12 +6,15 @@
 #include <cstdlib>
 #include <pthread.h>
 #include <execinfo.h>
+#include <filesystem>
 
 static LogLevel gLogMinLevel = LOG_DEFAULT_LEVEL;
 static FILE* gLogFile = nullptr;
 static int gFlushCacheSz = 8 * 1024;
 static int gPid = 0;
 static char gLastLogTiming[32] = {};
+static int gLogCountLimit = 30;
+static const char* gLogDir = "logs";
 
 static const char* gLogLevelNames[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
 
@@ -27,8 +30,12 @@ static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
 #define unlock_file(fp) funlockfile(fp)
 #endif
 
+void delete_logs_beyond(int days_ago);
+
 FILE* fopen_log_file_tdy()
 {
+  delete_logs_beyond(gLogCountLimit);
+
   time_t now = time(NULL);
   struct tm utc_tm;
   gmtime_r(&now, &utc_tm);
@@ -36,7 +43,7 @@ FILE* fopen_log_file_tdy()
   strftime(gLastLogTiming, sizeof(gLastLogTiming), "%Y%m%d_%A", &utc_tm);
 
   char filenamebuf[128] = {};
-  snprintf(filenamebuf, sizeof(filenamebuf), "log_%s.txt", gLastLogTiming);
+  snprintf(filenamebuf, sizeof(filenamebuf), "%s/log_%s.txt", gLogDir, gLastLogTiming);
 
   FILE* f = fopen(filenamebuf, "ab+");
   return f;
@@ -45,12 +52,18 @@ FILE* fopen_log_file_tdy()
 void log_set_file(FILE* log_file)
 { gLogFile = log_file; }
 
-void log_init(FILE* log_file, LogLevel level, int flush_cache_sz)
+void log_init(const char* log_dir, FILE* log_file, LogLevel level, int flush_cache_sz,
+              int log_limit)
 {
   gLogMinLevel = level;
   gLogFile = log_file;
   gFlushCacheSz = flush_cache_sz;
   gPid = getpid();
+  gLogCountLimit = log_limit;
+
+  gLogDir = log_dir;
+  if (!std::filesystem::exists(gLogDir))
+    std::filesystem::create_directory(gLogDir);
 
   free(gFileBuf);
   gFileBuf = (char*)malloc(gFlushCacheSz);
@@ -92,16 +105,21 @@ void check_new_log()
   char tbuf[32] = {};
   strftime(tbuf, sizeof(tbuf), "%Y%m%d_%A", &utc_tm);
 
+  // new day/crossover log, make new one and delete the others
   if (strcmp(gLastLogTiming, tbuf) != 0)
   {
+    log_flush();
     if (gLogFile)
       fclose(gLogFile);
+
     snprintf(gLastLogTiming, sizeof(gLastLogTiming), "%s", tbuf);
 
     char filenamebuf[128] = {};
-    snprintf(filenamebuf, sizeof(filenamebuf), "log_%s.txt", gLastLogTiming);
+    snprintf(filenamebuf, sizeof(filenamebuf), "%s/log_%s.txt", gLogDir, gLastLogTiming);
 
     gLogFile = fopen(filenamebuf, "ab+");
+
+    delete_logs_beyond(gLogCountLimit);
   }
 }
 
@@ -193,4 +211,22 @@ void log_backtrace()
   }
   LOG_WARN("===========backtrace=end===========");
   free(symbols);
+}
+
+void delete_logs_beyond(int days_ago)
+{
+  // delete logs older than 30 days to 30*2 days, perf limit
+  int iterations = days_ago * 2;
+  time_t t = time(NULL) - (86400 * days_ago);
+  struct tm del_tm;
+  char del_name[128] = {};
+  for (int i = 0; i < iterations; i++, t -= 86400)
+  {
+    gmtime_r(&t, &del_tm);
+    strftime(del_name, sizeof(del_name), "log_%Y%m%d_%A.txt", &del_tm);
+
+    char ffilename[256] = {};
+    snprintf(ffilename, sizeof(ffilename), "%s/%s", gLogDir, del_name);
+    remove(ffilename);
+  }
 }

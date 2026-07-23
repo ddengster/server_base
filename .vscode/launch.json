@@ -8,7 +8,7 @@
       "args": [],
       "stopAtEntry": true,
       "preLaunchTask": "make_task",
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/sample_server",
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",

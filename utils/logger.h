@@ -2,9 +2,8 @@
  * C/C++ Logger for server multiprocesses
  *
  * Modifications for server logging:
- * - log name mgt & deletion
- * - periodic batch flushing, and on close/crash/timeinterval&swap
- * - routine flush function
+ * - log daily rotation and mgt
+ * - periodic batched flushing, and on close/crash/swap
  * - @future: remote logging?
  */
 #pragma once
@@ -35,7 +34,8 @@ typedef enum
 
 /* Log Management/Core API */
 FILE* fopen_log_file_tdy();
-void log_init(FILE* log_file, LogLevel level = LOG_DEFAULT_LEVEL, int flush_cache_sz = 16 * 1024);
+void log_init(const char* log_dir, FILE* log_file, LogLevel level = LOG_DEFAULT_LEVEL,
+              int flush_cache_sz = 16 * 1024, int log_limit = 30);
 void log_childprocess_init();
 void log_flush();
 void log_backtrace();
