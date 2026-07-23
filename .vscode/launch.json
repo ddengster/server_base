@@ -22,7 +22,7 @@
           "ignoreFailures": true
         },
         {
-          // stops detach on fork in gdb
+          // follows only first child forked
           "description": "follow forked process",
           "text": "set follow-fork-mode child",
           "ignoreFailures": true
