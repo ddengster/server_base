@@ -19,6 +19,8 @@
 #include <sys/file.h>
 #include <limits.h>
 
+#include "logger.h"
+
 int set_process_limits(size_t coredump_filesz_limit, size_t fd_limit)
 {
   // core dump filesz

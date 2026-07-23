@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include "os_utils.h"
+#include "logger.h"
 
 const char* gProcessName = "sample_server";
 
@@ -19,17 +20,18 @@ int main(int argc, char* argv[])
   {
     printf("process: %s exist\n", gProcessName);
     exit(EXIT_FAILURE);
+    return -1;
   }
 
   if (set_process_limits() != 0)
   {
     printf("set_process_limits failed\n");
     exit(EXIT_FAILURE);
+    return -1;
   }
 
   // do initializations here..
-  {
-  }
+  log_init(fopen_log_file_tdy());
   /*
     uint worker_count = 4;
     for () {}*/
@@ -37,6 +39,6 @@ int main(int argc, char* argv[])
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
-  printf("end\n");
+  LOG_INFO("end\n");
   return 0;
 }
