@@ -226,4 +226,5 @@ int fork_process_and_keepalive()
       }
     }
   }
+  return 0;
 }

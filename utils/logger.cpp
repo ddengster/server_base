@@ -9,9 +9,9 @@
 
 static LogLevel gLogMinLevel = LOG_DEFAULT_LEVEL;
 static FILE* gLogFile = nullptr;
-static int gFlushCacheSz = 1;
-static int gFlushIntervalHours = 1;
+static int gFlushCacheSz = 8 * 1024;
 static int gPid = 0;
+static char gLastLogTiming[32] = {};
 
 static const char* gLogLevelNames[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
 
@@ -30,27 +30,26 @@ static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
 FILE* fopen_log_file_tdy()
 {
   time_t now = time(NULL);
-  struct tm* utc_tm = gmtime(&now);
+  struct tm utc_tm;
+  gmtime_r(&now, &utc_tm);
 
-  char tbuf[32] = {};
-  strftime(tbuf, sizeof(tbuf), "%Y%m%d_%A", utc_tm);
+  strftime(gLastLogTiming, sizeof(gLastLogTiming), "%Y%m%d_%A", &utc_tm);
 
-  char buf[128] = {};
-  snprintf(buf, sizeof(buf), "log_%s.txt", tbuf);
+  char filenamebuf[128] = {};
+  snprintf(filenamebuf, sizeof(filenamebuf), "log_%s.txt", gLastLogTiming);
 
-  FILE* f = fopen(buf, "ab+");
+  FILE* f = fopen(filenamebuf, "ab+");
   return f;
 }
 
 void log_set_file(FILE* log_file)
 { gLogFile = log_file; }
 
-void log_init(FILE* log_file, LogLevel level, int flush_cache_sz, int flush_interval_hours)
+void log_init(FILE* log_file, LogLevel level, int flush_cache_sz)
 {
   gLogMinLevel = level;
   gLogFile = log_file;
   gFlushCacheSz = flush_cache_sz;
-  gFlushIntervalHours = flush_interval_hours;
   gPid = getpid();
 
   free(gFileBuf);
@@ -84,17 +83,40 @@ void log_flush()
   }
 }
 
+void check_new_log()
+{
+  time_t now = time(NULL);
+  struct tm utc_tm;
+  gmtime_r(&now, &utc_tm);
+
+  char tbuf[32] = {};
+  strftime(tbuf, sizeof(tbuf), "%Y%m%d_%A", &utc_tm);
+
+  if (strcmp(gLastLogTiming, tbuf) != 0)
+  {
+    if (gLogFile)
+      fclose(gLogFile);
+    snprintf(gLastLogTiming, sizeof(gLastLogTiming), "%s", tbuf);
+
+    char filenamebuf[128] = {};
+    snprintf(filenamebuf, sizeof(filenamebuf), "log_%s.txt", gLastLogTiming);
+
+    gLogFile = fopen(filenamebuf, "ab+");
+  }
+}
+
 void log_log(LogLevel level, const char* filelog, const char* func, int line, const char* fmt, ...)
 {
   if (level < gLogMinLevel)
     return;
 
-  FILE* file = gLogFile;
+  check_new_log();
 
   time_t t = time(NULL);
-  struct tm* lt = localtime(&t);
+  struct tm utc_tm;
+  gmtime_r(&t, &utc_tm);
   char timebuf[10] = {};
-  strftime(timebuf, sizeof(timebuf), "%H:%M:%S", lt);
+  strftime(timebuf, sizeof(timebuf), "%H:%M:%S", &utc_tm);
 
   char msgbuf[4096] = {};
   va_list args;
@@ -131,6 +153,7 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
 
   pthread_mutex_lock(&gLogMutex);
 
+  FILE* file = gLogFile;
   if (file && file_len > 0)
   {
     int final_sz = gFilePos + file_len;
