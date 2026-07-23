@@ -38,4 +38,26 @@ Linux
 - Built outputs should be located in the subfolder. You can place your config files there.
 
 
+# Modifying
 
+- You can add new services at the base `Makefile` by adding a subdir and source files. Polyglot languages are allowed as long as they have a makefile and the appropriate packages installed
+
+
+
+# Features
+
+## Sample
+
+- Basic program forking 4 child process with the master process restarting them if they crash, ensuring fault tolerance.
+
+- The 4 child processes then listen on port and handle 
+
+## Utilities
+
+- Logging
+
+- Json Parser
+
+- Timing mechanism
+
+- Http parser
