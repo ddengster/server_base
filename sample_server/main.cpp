@@ -20,7 +20,8 @@ int main(int argc, char* argv[])
   */
   if (process_exist(gProcessName) != 0)
   {
-    printf("process: %s exist\n", gProcessName);
+    printf("process: %s exists. pgrep <process name> for pid and use kill -9 <pid>\n",
+           gProcessName);
     exit(EXIT_FAILURE);
     return -1;
   }
@@ -33,7 +34,7 @@ int main(int argc, char* argv[])
   }
 
   // do initializations here..
-  log_init("logs", fopen_log_file_tdy());
+  log_init("logs");
   /*
     uint worker_count = 4;
     for () {}*/

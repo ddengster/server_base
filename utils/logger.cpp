@@ -52,11 +52,9 @@ FILE* fopen_log_file_tdy()
 void log_set_file(FILE* log_file)
 { gLogFile = log_file; }
 
-void log_init(const char* log_dir, FILE* log_file, LogLevel level, int flush_cache_sz,
-              int log_limit)
+void log_init(const char* log_dir, LogLevel level, int flush_cache_sz, int log_limit)
 {
   gLogMinLevel = level;
-  gLogFile = log_file;
   gFlushCacheSz = flush_cache_sz;
   gPid = getpid();
   gLogCountLimit = log_limit;
@@ -64,6 +62,7 @@ void log_init(const char* log_dir, FILE* log_file, LogLevel level, int flush_cac
   gLogDir = log_dir;
   if (!std::filesystem::exists(gLogDir))
     std::filesystem::create_directory(gLogDir);
+  gLogFile = fopen_log_file_tdy();
 
   free(gFileBuf);
   gFileBuf = (char*)malloc(gFlushCacheSz);
@@ -75,7 +74,6 @@ void log_init(const char* log_dir, FILE* log_file, LogLevel level, int flush_cac
 void log_shutdown()
 {
   free(gFileBuf);
-
   gFileBuf = nullptr;
 }
 

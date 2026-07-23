@@ -33,8 +33,7 @@ typedef enum
 #endif
 
 /* Log Management/Core API */
-FILE* fopen_log_file_tdy();
-void log_init(const char* log_dir, FILE* log_file, LogLevel level = LOG_DEFAULT_LEVEL,
+void log_init(const char* log_dir = ".", LogLevel level = LOG_DEFAULT_LEVEL,
               int flush_cache_sz = 16 * 1024, int log_limit = 30);
 void log_childprocess_init();
 void log_flush();
