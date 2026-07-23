@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <pthread.h>
+#include <execinfo.h>
 
 static LogLevel gLogMinLevel = LOG_DEFAULT_LEVEL;
 static FILE* gLogFile = nullptr;
@@ -44,8 +45,7 @@ FILE* fopen_log_file_tdy()
 void log_set_file(FILE* log_file)
 { gLogFile = log_file; }
 
-void log_init(FILE* log_file, FILE* console_file, LogLevel level, int flush_cache_sz,
-              int flush_interval_hours)
+void log_init(FILE* log_file, LogLevel level, int flush_cache_sz, int flush_interval_hours)
 {
   gLogMinLevel = level;
   gLogFile = log_file;
@@ -148,4 +148,26 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
 #endif
 
   pthread_mutex_unlock(&gLogMutex);
+}
+
+void log_backtrace()
+{
+  void* stack[64] = {};
+  char** symbols = nullptr;
+  int size, i, j;
+
+  size = backtrace(stack, 64);
+  symbols = backtrace_symbols(stack, size);
+  if (symbols == NULL)
+    return;
+  if (size == 1)
+    return;
+
+  LOG_WARN("==========backtrace=start==========");
+  for (i = 1, j = 0; i < size; ++i, ++j)
+  {
+    LOG_WARN("%2d %s", j, symbols[i]);
+  }
+  LOG_WARN("===========backtrace=end===========");
+  free(symbols);
 }

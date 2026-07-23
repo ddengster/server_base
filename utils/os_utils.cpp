@@ -119,47 +119,44 @@ void signal_handler(int signo)
 {
   if (signo == SIGUSR1)
   {
-    // log_vip("[%d]signal: %d (%s) received", getpid(), signo, sig->signame);
+    LOG_WARN("[%d]signal: %d SIGUSR1 received", getpid(), signo);
     // signal_reload = 1;
   }
   else if (signo == SIGTTIN)
   {
-    // dlog_level_up();
-    // log_vip("[%d]signal: %d (%s) received, logging level up: %#x", getpid(), signo, sig->signame,
-    //         default_dlog_flag);
+    LOG_WARN("[%d]signal: %d (SIGTTIN) received", getpid(), signo);
   }
   else if (signo == SIGTTOU)
   {
-    // dlog_level_down();
-    // log_vip("[%d]signal: %d (%s) received, logging level down: %#x", getpid(), signo,
-    // sig->signame,
-    //         default_dlog_flag);
+    LOG_WARN("[%d]signal: %d (SIGTTOU) received", getpid(), signo);
   }
   else if (signo == SIGQUIT)
   {
-    // log_vip("[%d]signal: %d (%s) received, exiting", getpid(), signo, sig->signame);
+    LOG_FATAL("[%d]signal: %d (SIGQUIT) received, exiting", getpid(), signo);
     gSignalExit = 1;
   }
   else if (signo == SIGTERM)
   {
-    // log_vip("[%d]signal: %d (%s) received, exiting", getpid(), signo, sig->signame);
+    LOG_FATAL("[%d]signal: %d (SIGTERM) received, exiting", getpid(), signo);
     gSignalExit = 1;
   }
   else if (signo == SIGSEGV)
   {
-    // log_exception("[%d]signal: %d (%s) received, core dumping", getpid(), signo, sig->signame);
-    //     dlog_flush_all();
-    //     raise(SIGSEGV);
+    LOG_ERROR("[%d]signal: %d (SIGSEGV) received, core dumping", getpid(), signo);
+    log_backtrace();
+    log_flush();
+    raise(SIGSEGV);
   }
-  else if (signo == SIGUSR1)
+  else if (signo == SIGABRT)
   {
-    // log_exception("[%d]signal: %d (%s) received, core dumping", getpid(), signo, sig->signame);
-    // dlog_flush_all();
-    // raise(SIGABRT);
+    LOG_ERROR("[%d]signal: %d (SIGABRT) received, core dumping", getpid(), signo);
+    log_backtrace();
+    log_flush();
+    raise(SIGABRT);
   }
   else
   {
-    // log_vip("[%d]signal: %d (%s) received", getpid(), signo, sig->signame);
+    LOG_WARN("[%d]signal: %d received", getpid(), signo);
   }
 }
 
@@ -167,7 +164,12 @@ int fork_process_and_keepalive()
 {
   // forks the process. the child process will carry on, while the parent process observes the child
   // process
+  uint restart_count = 0;
+#ifdef DEVELOPER_BUILD
+  while (restart_count < 5)
+#else
   while (true)
+#endif
   {
     int pid = fork();
     if (pid < 0)
@@ -179,6 +181,7 @@ int fork_process_and_keepalive()
     {
       // child process, initialize signals
       init_signals();
+      log_childprocess_init();
       return 0;
     }
     else
@@ -201,7 +204,7 @@ int fork_process_and_keepalive()
           exit(EXIT_SUCCESS);
         else
         {
-          // log_error("waitpid: %d error: %d: %s", pid, ret, strerror(errno));
+          LOG_ERROR("waitpid: %d error: %d: %s", pid, ret, strerror(errno));
           exit(EXIT_FAILURE);
         }
       }
@@ -210,14 +213,15 @@ int fork_process_and_keepalive()
         exit(EXIT_SUCCESS);
       else if (WIFSIGNALED(status))
       {
-        // log_fatal("process: %d, name: %s terminated by signal: '%s'", pid,
-        //           program_invocation_short_name, strsignal(WTERMSIG(status)));
+        LOG_FATAL("process: %d, name: %s terminated by signal: '%s'", pid,
+                  program_invocation_short_name, strsignal(WTERMSIG(status)));
         usleep(1000 * 1000);
+        ++restart_count;
         continue;
       }
       else
       {
-        // log_error("process: %d terminated, waitpid status: %d\n", pid, status);
+        LOG_ERROR("process: %d terminated, waitpid status: %d\n", pid, status);
         exit(EXIT_FAILURE);
       }
     }

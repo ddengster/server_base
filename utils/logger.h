@@ -9,12 +9,15 @@
  */
 #pragma once
 
+#include "prereqs.h"
 #include <stdarg.h>
 #include <stdio.h>
 
 // macros, enable for development needs
+#ifdef DEVELOPER_BUILD
 #define LOG_TO_CONSOLE 1  // logging to console
 #define LOG_AUTO_FLUSH 1  // auto flush after every log, disable for perf
+#endif
 
 typedef enum
 {
@@ -32,10 +35,11 @@ typedef enum
 
 /* Log Management/Core API */
 FILE* fopen_log_file_tdy();
-void log_init(FILE* log_file, FILE* console_file = stdout, LogLevel level = LOG_DEFAULT_LEVEL,
-              int flush_cache_sz = 16 * 1024, int flush_interval_hours = 1);
+void log_init(FILE* log_file, LogLevel level = LOG_DEFAULT_LEVEL, int flush_cache_sz = 16 * 1024,
+              int flush_interval_hours = 1);
 void log_childprocess_init();
 void log_flush();
+void log_backtrace();
 void log_shutdown();
 
 void log_log(LogLevel level, const char* filelog, const char* func, int line, const char* fmt, ...);
