@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "prereqs.h"
 #include <cstddef>
 
 int set_process_limits(size_t coredump_filesz_limit = 30 * 1024,  // 30mb
