@@ -158,7 +158,10 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
 
   // print to console
 #ifdef LOG_TO_CONSOLE
-  fprintf(stdout, "%s[%s] [pid:%d] %s[%s:%d, %s()] %s[%-5s] %s%s\n", COLOR_TIME, timebuf, gPid,
+  FILE* stream = stdout;
+  if (level == LOG_WARN || level == LOG_ERROR || level == LOG_FATAL)
+    stream = stderr;
+  fprintf(stream, "%s[%s] [pid:%d] %s[%s:%d, %s()] %s[%-5s] %s%s\n", COLOR_TIME, timebuf, gPid,
           color, filelog_shortened, line, func, color, gLogLevelNames[level], msgbuf, COLOR_RESET);
 #endif
 
