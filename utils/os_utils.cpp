@@ -84,6 +84,7 @@ static void signal_handler(int signo);
 
 int init_signals()
 {
+  //@note: libuv's version of the handler runs during uv_run(), this is asynchronous
   //@reference: https://man7.org/linux/man-pages/man7/signal.7.html
   auto setup_signal = [](int signalno, bool reset_handler, void (*handler_func)(int))
   {

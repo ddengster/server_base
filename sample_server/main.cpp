@@ -6,8 +6,11 @@
 #include <errno.h>
 #include <error.h>
 
+#include <uv.h>
+
 #include "os_utils.h"
 #include "logger.h"
+#include "network.h"
 
 const char* gProcessName = "sample_server";
 
@@ -39,9 +42,13 @@ int main(int argc, char* argv[])
   // do initializations here..
   log_init("logs");
 
-#if 1
-  // process that spawns multiple workers
+  //@note: good read on multiprocess vs multithread.
+  // Tldr: multiprocess for untrusted 3rd party 'this-can-crash' code, otherwise multithread
+  // https://www.reddit.com/r/ExperiencedDevs/comments/1pqoo4g/multi_process_or_multi_thread_architectures_on/
+
+#if 0    // process that spawns multiple worker processes
   //@note: gdb only follows first forked child, for dev debug one first
+
   int worker_count = 4;
   for (int i = 0; i < worker_count; ++i)
   {
@@ -69,7 +76,7 @@ int main(int argc, char* argv[])
   }
 
   // main process becomes listener
-  // process_title_set("%s_listener", __process__);
+  process_title_set("%s_listener", __process__);
   daemon(1, 1);
   fork_process_and_keepalive();
 
@@ -77,6 +84,18 @@ run:
   LOG_INFO("end\n");
 
   while (true) {}
+  return 0;
+#elif 1  // libuv multithread implementation
+
+  daemon(1, 1);  // detach from controlling terminal
+  fork_process_and_keepalive();
+
+  uv_loop_t* loop = uv_default_loop();
+  set_loop(loop);
+  tcp_server_setup("127.0.0.1", 8080);
+
+  return uv_run(loop, UV_RUN_DEFAULT);
+
 
 #else
   daemon(1, 1);  // detach from controlling terminal
@@ -84,6 +103,6 @@ run:
 
 
   LOG_INFO("end\n");
-#endif
   return 0;
+#endif
 }
