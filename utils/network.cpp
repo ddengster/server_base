@@ -19,9 +19,10 @@ void tcp_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
 {
   if (nread > 0)
   {
+#ifdef NETWORK_DBG_LOG
     uv_thread_t th = uv_thread_self();
-    LOG("threadid: %d, Received %d bytes: %.*s\n", th, (int)nread, nread, buf->base);
-
+    LOG("threadid: %ld, Received %d bytes: %.*s\n", th, (int)nread, nread, buf->base);
+#endif
     auto settings = (TCPServerSettings*)client->data;
     if (settings->mDataRecvCallback)
       settings->mDataRecvCallback(client, buf);

@@ -2,8 +2,8 @@
 #pragma once
 
 #include <uv.h>
-#include <unordered_map>
 
+#define NETWORK_DBG_LOG 1
 /**
  * Networking setups
  */
