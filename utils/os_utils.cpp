@@ -96,7 +96,7 @@ int init_signals()
     int ret = sigaction(signalno, &sa, NULL);
     if (ret < 0)
     {
-      // log_vip("failed to set signal %d", signalno);
+      LOG_WARN("failed to set signal %d", signalno);
       return -1;
     }
     return 0;

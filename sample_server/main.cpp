@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <error.h>
+#include <cstring>
 
 #include <uv.h>
 
@@ -90,11 +91,79 @@ run:
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
-  uv_loop_t* loop = uv_default_loop();
-  set_loop(loop);
-  tcp_server_setup("127.0.0.1", 8080);
+#if 0
+  {
+    // a single server listening on a port intended to serve other internal backend servers
+    uv_loop_t* loop = uv_default_loop();
+    TCPServerSettings settings;
+    settings.mIPAddress = "127.0.0.1";
+    settings.mPort = 8081;
+    settings.mDataRecvCallback = [](uv_stream_t* client, const uv_buf_t* buf)
+    {
+      const char* message = "ok\n";
+      if (buf->len > 0 && (buf->base[0] >= '1' && buf->base[0] <= '9'))
+        message = "number ok\n";
 
-  return uv_run(loop, UV_RUN_DEFAULT);
+      uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+      req->data = client;
+
+      uv_buf_t sendbuf = uv_buf_init((char*)message, strlen(message));
+      int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+      if (result < 0)
+      {
+        LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
+        free(req);
+      }
+    };
+
+    tcp_server_setup(loop, &settings);
+    return uv_run(loop, UV_RUN_DEFAULT);
+  }
+#endif
+
+#if 1
+  {
+    // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to
+    // handle loading balancing between sockets for you. from then on oyu
+    // setenv("UV_THREADPOOL_SIZE", "8", 1);
+
+    auto server_tcp_callback = [](uv_stream_t* client, const uv_buf_t* buf)
+    {
+      const char* message = "ok\n";
+      if (buf->len > 0 && (buf->base[0] >= '1' && buf->base[0] <= '9'))
+        message = "number ok\n";
+
+      uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+      req->data = client;
+
+      uv_buf_t sendbuf = uv_buf_init((char*)message, strlen(message));
+      int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+      if (result < 0)
+      {
+        LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
+        free(req);
+      }
+    };
+
+    uint num_threads = 4;
+    TCPServerSettings* settings = new TCPServerSettings[num_threads];
+    uv_thread_t* thread = new uv_thread_t[num_threads];
+
+    for (uint i = 0; i < num_threads; ++i)
+    {
+      settings[i].mIPAddress = "127.0.0.1";
+      settings[i].mPort = 8081;
+      settings[i].mDataRecvCallback = server_tcp_callback;
+      uv_thread_create(&thread[i], server_thread_func, &settings[i]);
+    }
+
+    for (int i = 0; i < 4; ++i)
+      uv_thread_join(&thread[i]);
+    delete[] settings;
+    delete[] thread;
+  }
+#endif
+  return 0;
 
 
 #else
