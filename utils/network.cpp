@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <uv.h>
 
+#include "picohttpparser.h"
+
 // prompt 'How glibc malloc Routes malloc', 1032bytes or 80-160byte
 #define MAX_PACKET_SIZE 1 * 1024
 
@@ -19,7 +21,7 @@ void tcp_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
 {
   if (nread > 0)
   {
-#ifdef NETWORK_DBG_LOG
+#ifdef NETWORK_DBG
     uv_thread_t th = uv_thread_self();
     LOG("threadid: %ld, Received %d bytes: %.*s\n", th, (int)nread, nread, buf->base);
 #endif
@@ -135,7 +137,11 @@ void server_thread_func(void* userdata)
   struct sockaddr_in addr;
   uv_ip4_addr(server_settings->mIPAddress, server_settings->mPort, &addr);
 
+#ifdef NETWORK_DBG
+  uv_tcp_bind(server, (const struct sockaddr*)&addr, 0);
+#else
   uv_tcp_bind(server, (const struct sockaddr*)&addr, SO_REUSEPORT);
+#endif
 
   int r = uv_listen((uv_stream_t*)server, server_settings->mBacklogQueueSz, tcp_on_new_connection);
   if (r)
@@ -156,4 +162,104 @@ void common_write_end_cb(uv_write_t* req, int status)
 
   // Free the request memory allocated in the write call
   free(req);
+}
+
+void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
+{
+  if (nread > 0)
+  {
+#ifdef NETWORK_DBG
+    uv_thread_t th = uv_thread_self();
+    LOG("threadid: %ld, Received %d bytes: %.*s\n", th, (int)nread, nread, buf->base);
+#endif
+    // parse http request
+    const char* method = nullptr;
+    const char* path = nullptr;
+    size_t method_len = 0, path_len = 0;
+    int minor_version = 0;
+
+    static const size_t max_headers = 64;
+    phr_header headers[max_headers] = {};
+    size_t num_headers = max_headers;
+    size_t prev_buf_len = 0;
+
+    int pret = phr_parse_request(buf->base, buf->len, &method, &method_len, &path, &path_len,
+                                 &minor_version, headers, &num_headers, prev_buf_len);
+    if (pret > 0)  // success
+    {
+      LOG("SUCCESS: method: %.*s, path: %.*s, ", method_len, method, path_len, path);
+      auto settings = (HTTPServerSettings*)client->data;
+      // if (settings->mDataRecvCallback)
+      //   settings->mDataRecvCallback(client, buf);
+    }
+    else if (pret == -1)  // error
+      LOG_WARN("Error parsing http request: %d", pret);
+    else if (pret <= -2)
+      LOG_WARN("Partial request, replying them to send below %d size", MAX_PACKET_SIZE);
+  }
+  else if (nread < 0)
+  {
+    if (nread != UV_EOF)
+      LOG_WARN("Read error %s\n", uv_strerror(nread));
+
+    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+  }
+  if (buf->base)
+    free(buf->base);
+}
+
+void http_on_new_connection(uv_stream_t* server, int status)
+{
+  if (status < 0)
+  {
+    LOG_WARN("New connection error %s\n", uv_strerror(status));
+    return;
+  }
+
+  uv_tcp_t* client = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+  uv_tcp_init(server->loop, client);
+  client->data = server->data;
+
+  if (uv_accept(server, (uv_stream_t*)client) == 0)
+  {
+    // non blocking
+    uv_read_start((uv_stream_t*)client, on_alloc, http_on_read);
+  }
+  else
+    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+}
+
+
+void http_server_thread_func(void* userdata)
+{
+  auto server_settings = (HTTPServerSettings*)userdata;
+
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+
+  uv_tcp_t* server = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+  uv_tcp_init(&loop, server);
+  uv_tcp_simultaneous_accepts(server, 1);
+  uv_tcp_nodelay(server, 1);
+  server->data = server_settings;
+
+  struct sockaddr_in addr;
+  uv_ip4_addr(server_settings->mIPAddress, server_settings->mPort, &addr);
+
+#ifdef NETWORK_DBG
+  uv_tcp_bind(server, (const struct sockaddr*)&addr, 0);
+#else
+  uv_tcp_bind(server, (const struct sockaddr*)&addr, SO_REUSEPORT);
+#endif
+
+  int r = uv_listen((uv_stream_t*)server, server_settings->mBacklogQueueSz, http_on_new_connection);
+  if (r)
+  {
+    LOG_WARN("Listen error %s\n", uv_strerror(r));
+    return;
+  }
+
+  uv_run(&loop, UV_RUN_DEFAULT);
+
+  uv_loop_close(&loop);
 }

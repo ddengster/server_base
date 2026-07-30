@@ -1,4 +1,4 @@
-SUBDIRS := alt_program sample_server
+SUBDIRS := alt_program sample_server sample_http
 
 .PHONY: all clean $(SUBDIRS) $(SUBDIRS:%=%-clean)
 

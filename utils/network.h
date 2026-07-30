@@ -3,7 +3,7 @@
 
 #include <uv.h>
 
-#define NETWORK_DBG_LOG 1
+#define NETWORK_DBG 1
 /**
  * Networking setups
  */
@@ -25,3 +25,13 @@ void server_thread_func(void* userdata);
 
 // common 'end' callbacks
 void common_write_end_cb(uv_write_t* req, int status);
+
+struct HTTPServerSettings
+{
+  const char* mIPAddress = nullptr;
+  int mPort = 0;
+  int mBacklogQueueSz = SOMAXCONN;
+};
+
+// entry point for a server. userdata is expected to be type TCPServerSettings
+void http_server_thread_func(void* userdata);
