@@ -8,6 +8,7 @@
 // Callback to allocate memory when receiving data
 void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
+  (void)handle;
   buf->base = (char*)malloc(suggested_size);
   buf->len = suggested_size;
 }
@@ -82,8 +83,10 @@ void on_connect(uv_connect_t* req, int status)
   uv_read_start(stream, alloc_buffer, on_read);
 
   // 2. Prepare and send an initial greeting message
-  char* message = "Hello from libuv client!";
-  uv_buf_t buffer = uv_buf_init(message, strlen(message));
+  const char* message = "Hello from libuv client!";
+  char* b = (char*)malloc(strlen(message) + 1);
+  strncpy(b, message, strlen(message) + 1);
+  uv_buf_t buffer = uv_buf_init(b, strlen(message) + 1);
 
   uv_write_t* write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
   int result = uv_write(write_req, stream, &buffer, 1, on_write);

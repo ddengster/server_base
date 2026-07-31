@@ -14,6 +14,8 @@
 
 void on_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
+  (void)handle;
+  (void)suggested_size;
   // uv_handle_get_loop(handle);
   //  ignore packet sizes, give 1k
   buf->base = (char*)malloc(MAX_PACKET_SIZE);

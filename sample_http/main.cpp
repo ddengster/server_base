@@ -65,6 +65,7 @@ int main(int argc, char* argv[])
       auto subtract_func = [](uv_stream_t* client, yyjson_val* params, int params_count,
                               yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
       {
+        (void)client;
         if (params_count != 2)
           return kJsonRpcInvalidParams;
         if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_NUM ||
@@ -84,6 +85,7 @@ int main(int argc, char* argv[])
       auto add_func = [](uv_stream_t* client, yyjson_val* params, int params_count,
                          yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
       {
+        (void)client;
         if (params_count != 2)
           return kJsonRpcInvalidParams;
         if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_NUM ||
