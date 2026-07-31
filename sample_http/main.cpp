@@ -12,6 +12,7 @@
 #include "os_utils.h"
 #include "logger.h"
 #include "network.h"
+#include "yyjson.h"
 
 const char* gProcessName = "sample_http";
 
@@ -50,25 +51,7 @@ int main(int argc, char* argv[])
   {
     // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to
     // handle loading balancing between sockets for you. from then on oyu
-    // setenv("UV_THREADPOOL_SIZE", "8", 1);
-
-    auto server_tcp_callback = [](uv_stream_t* client, const uv_buf_t* buf)
-    {
-      const char* message = "ok\n";
-      if (buf->len > 0 && (buf->base[0] >= '1' && buf->base[0] <= '9'))
-        message = "number ok\n";
-
-      uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-      req->data = client;
-
-      uv_buf_t sendbuf = uv_buf_init((char*)message, strlen(message));
-      int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
-      if (result < 0)
-      {
-        LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
-        free(req);
-      }
-    };
+    setenv("UV_THREADPOOL_SIZE", "8", 1);
 
     uint num_threads = 1;
     HTTPServerSettings* settings = new HTTPServerSettings[num_threads];
@@ -78,7 +61,46 @@ int main(int argc, char* argv[])
     {
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
-      // settings[i].mDataRecvCallback = server_tcp_callback;
+
+      auto subtract_func = [](uv_stream_t* client, yyjson_val* params, int params_count,
+                              yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
+      {
+        if (params_count != 2)
+          return kJsonRpcInvalidParams;
+        if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_NUM ||
+            yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
+          return kJsonRpcInvalidParams;
+
+        double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
+        double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
+        LOG_INFO("%.2f, %.2f", param1, param2);
+
+        yyjson_mut_obj_add_double(doc, result, "difference", param1 - param2);
+
+        return kJsonRpcSuccess;
+      };
+      settings[i].mRpcCallbacks.emplace(Hash("subtract"), subtract_func);
+
+      auto add_func = [](uv_stream_t* client, yyjson_val* params, int params_count,
+                         yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
+      {
+        if (params_count != 2)
+          return kJsonRpcInvalidParams;
+        if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_NUM ||
+            yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
+          return kJsonRpcInvalidParams;
+
+        double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
+        double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
+        LOG_INFO("%.2f, %.2f", param1, param2);
+
+        yyjson_mut_obj_add_double(doc, result, "difference", param1 - param2);
+        yyjson_mut_obj_add_double(doc, result, "sum", param1 + param2);
+
+        return kJsonRpcSuccess;
+      };
+      settings[i].mRpcCallbacks.emplace(Hash("add"), add_func);
+
       uv_thread_create(&thread[i], http_server_thread_func, &settings[i]);
     }
 

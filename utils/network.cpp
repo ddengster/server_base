@@ -167,10 +167,9 @@ void common_write_end_cb(uv_write_t* req, int status)
   free(req);
 }
 
-static void send_jsonrpc_error(uv_stream_t* client, int code, const char* message)
+static void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id)
 {
-  if (uv_is_closing((uv_handle_t*)client))
-    return;
+  //@note: prompt "json rpc errors" for error codes
   yyjson_mut_doc* doc = yyjson_mut_doc_new(NULL);
   yyjson_mut_val* root = yyjson_mut_obj(doc);
   yyjson_mut_doc_set_root(doc, root);
@@ -179,7 +178,10 @@ static void send_jsonrpc_error(uv_stream_t* client, int code, const char* messag
   yyjson_mut_val* err = yyjson_mut_obj_add_obj(doc, root, "error");
   yyjson_mut_obj_add_int(doc, err, "code", code);
   yyjson_mut_obj_add_str(doc, err, "message", message);
-  yyjson_mut_obj_add_val(doc, root, "id", yyjson_mut_null(doc));
+  if (id == nullptr)
+    yyjson_mut_obj_add_val(doc, root, "id", yyjson_mut_null(doc));
+  else
+    yyjson_mut_obj_add_int(doc, root, "id", *id);
 
   size_t json_len = 0;
   char* json = yyjson_mut_write(doc, 0, &json_len);
@@ -192,26 +194,142 @@ static void send_jsonrpc_error(uv_stream_t* client, int code, const char* messag
                      "Content-Length: %zu\r\n"
                      "Connection: close\r\n"
                      "\r\n"
-                     "%s",
+                     "%s\r\n",
                      json_len, json);
-  // free(json);
-
+  free(json);
 
   uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
   req->data = client;
 
   char* b = (char*)malloc(len + 1);
-  strncpy(b, buf, len);
+  strncpy(b, buf, (size_t)len + 1);
 
   uv_buf_t sendbuf = uv_buf_init(b, len + 1);
-  if (uv_is_closing((uv_handle_t*)client))
-    return;
-  int result = uv_try_write(client, &sendbuf, 1);
+  int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
   if (result < 0)
   {
     LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
     free(req);
   }
+}
+
+static void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
+                                  yyjson_mut_val* result)
+{
+  yyjson_mut_val* root = yyjson_mut_obj(doc);
+  yyjson_mut_doc_set_root(doc, root);
+
+  yyjson_mut_obj_add_str(doc, root, "jsonrpc", "2.0");
+  yyjson_mut_obj_add_val(doc, root, "result", result);
+  if (id == nullptr)
+    yyjson_mut_obj_add_val(doc, root, "id", yyjson_mut_null(doc));
+  else
+    yyjson_mut_obj_add_int(doc, root, "id", *id);
+
+  size_t json_len = 0;
+  char* json = yyjson_mut_write(doc, 0, &json_len);
+
+  char buf[1024] = {};
+  int len = snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/json\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n"
+                     "\r\n"
+                     "%s\r\n",
+                     json_len, json);
+  free(json);
+
+  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+  req->data = client;
+
+  char* b = (char*)malloc((size_t)len + 1);
+  strncpy(b, buf, (size_t)len + 1);
+
+  uv_buf_t sendbuf = uv_buf_init(b, (size_t)len + 1);
+  int result_code = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+  if (result_code < 0)
+  {
+    LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result_code));
+    free(req);
+  }
+}
+
+static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t body_len,
+                                   HTTPServerSettings* settings)
+{
+  yyjson_doc* doc = yyjson_read(body, body_len, 0);
+  if (doc == NULL)
+  {
+    LOG_WARN("JSON-RPC: parse error\n");
+    send_jsonrpc_error(client, kJsonRpcParseError, "Parse error", nullptr);
+    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    return;
+  }
+
+  yyjson_val* root = yyjson_doc_get_root(doc);
+  yyjson_val* jsonrpc = yyjson_obj_get(root, "jsonrpc");
+  yyjson_val* method = yyjson_obj_get(root, "method");
+  yyjson_val* id = yyjson_obj_get(root, "id");
+  int id_num = yyjson_get_num(id);  // 0 if null
+  int* msg_id = yyjson_is_null(id) ? nullptr : &id_num;
+
+  bool valid = yyjson_is_obj(root) && yyjson_is_str(jsonrpc) &&
+               strcmp(yyjson_get_str(jsonrpc), "2.0") == 0 && yyjson_is_str(method) &&
+               yyjson_get_len(method) > 0 && (id == NULL || !yyjson_is_null(id));
+
+  if (!valid)
+  {
+    LOG_WARN("JSON-RPC: invalid request\n");
+    send_jsonrpc_error(client, kJsonRpcParseError, "Parse Error", msg_id);
+    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    yyjson_doc_free(doc);
+    return;
+  }
+
+  yyjson_val* params = yyjson_obj_get(root, "params");
+  uint params_count = yyjson_arr_size(params);
+  size_t params_len = 0;
+  char* params_str = yyjson_val_write(params, 0, &params_len);
+
+#ifdef NETWORK_DBG
+  LOG("JSON-RPC: method: %s, params: %s\n", yyjson_get_str(method),
+      params_str ? params_str : "null");
+#endif
+
+  auto itr = settings->mRpcCallbacks.find(Hash(yyjson_get_str(method)));
+  if (itr != settings->mRpcCallbacks.end())
+  {
+    JsonRpcCallbackFunc cb = (JsonRpcCallbackFunc)itr->second;
+    if (cb)
+    {
+      yyjson_mut_doc* result_doc = yyjson_mut_doc_new(NULL);
+      yyjson_mut_val* result = yyjson_mut_obj(result_doc);
+
+      JsonRpcResult ret = cb(client, params, params_count, result_doc, result);
+      if (ret == kJsonRpcSuccess)
+        send_jsonrpc_response(client, msg_id, result_doc, result);
+      else if (ret == kJsonRpcInvalidParams)
+      {
+        char errmsg[64] = {};
+        snprintf(errmsg, sizeof(errmsg), "Invalid params");
+        send_jsonrpc_error(client, kJsonRpcInvalidParams, errmsg, msg_id);
+      }
+      else if (ret == kJsonRpcInternalError)
+        send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
+      else
+        send_jsonrpc_error(client, ret, "Internal error", msg_id);
+
+      yyjson_mut_doc_free(result_doc);
+    }
+  }
+  else
+  {
+    send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Method not found", msg_id);
+  }
+
+  free(params_str);
+  yyjson_doc_free(doc);
 }
 
 void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
@@ -241,17 +359,31 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
       auto settings = (HTTPServerSettings*)client->data;
       // if (settings->mDataRecvCallback)
       //   settings->mDataRecvCallback(client, buf);
+#ifdef RESTRICT_POST_ONLY
+      if (strncmp(method, "POST", method_len) != 0)
+      {
+        send_jsonrpc_error(client, 400, "Incorrect HTTP method (use POST)", nullptr);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      }
+      else
+#endif
+      {
+        const char* body = buf->base + pret;
+        size_t body_len = (size_t)(nread - pret);
+        handle_jsonrpc_request(client, body, body_len, settings);
+      }
     }
     else if (pret == -1)  // parse error
     {
       LOG_WARN("Error parsing http request: %d", pret);
-      send_jsonrpc_error(client, 400, "Parse error");
+      send_jsonrpc_error(client, kJsonRpcParseError, "Parse error", nullptr);
       uv_close((uv_handle_t*)client, (uv_close_cb)free);
     }
     else if (pret <= -2)
     {
       LOG_WARN("Partial request, replying them to send below %d size", MAX_PACKET_SIZE);
-      send_jsonrpc_error(client, 500, "Server Error Sz");
+      send_jsonrpc_error(client, kJsonRpcServerError,
+                         "Server Error (Sz), try downsizing your packages", nullptr);
       uv_close((uv_handle_t*)client, (uv_close_cb)free);
     }
   }
