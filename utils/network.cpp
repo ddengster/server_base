@@ -1,10 +1,13 @@
 
 #include "network.h"
 #include "logger.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <uv.h>
 
 #include "picohttpparser.h"
+#include "yyjson.h"
 
 // prompt 'How glibc malloc Routes malloc', 1032bytes or 80-160byte
 #define MAX_PACKET_SIZE 1 * 1024
@@ -13,7 +16,7 @@ void on_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
   // uv_handle_get_loop(handle);
   //  ignore packet sizes, give 1k
-  buf->base = new char[MAX_PACKET_SIZE];
+  buf->base = (char*)malloc(MAX_PACKET_SIZE);
   buf->len = MAX_PACKET_SIZE;
 }
 
@@ -164,6 +167,53 @@ void common_write_end_cb(uv_write_t* req, int status)
   free(req);
 }
 
+static void send_jsonrpc_error(uv_stream_t* client, int code, const char* message)
+{
+  if (uv_is_closing((uv_handle_t*)client))
+    return;
+  yyjson_mut_doc* doc = yyjson_mut_doc_new(NULL);
+  yyjson_mut_val* root = yyjson_mut_obj(doc);
+  yyjson_mut_doc_set_root(doc, root);
+
+  yyjson_mut_obj_add_str(doc, root, "jsonrpc", "2.0");
+  yyjson_mut_val* err = yyjson_mut_obj_add_obj(doc, root, "error");
+  yyjson_mut_obj_add_int(doc, err, "code", code);
+  yyjson_mut_obj_add_str(doc, err, "message", message);
+  yyjson_mut_obj_add_val(doc, root, "id", yyjson_mut_null(doc));
+
+  size_t json_len = 0;
+  char* json = yyjson_mut_write(doc, 0, &json_len);
+  yyjson_mut_doc_free(doc);
+
+  char buf[512] = {};
+  int len = snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 400 Bad Request\r\n"
+                     "Content-Type: application/json\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: close\r\n"
+                     "\r\n"
+                     "%s",
+                     json_len, json);
+  // free(json);
+
+
+  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+  req->data = client;
+
+  char* b = (char*)malloc(len + 1);
+  strncpy(b, buf, len);
+
+  uv_buf_t sendbuf = uv_buf_init(b, len + 1);
+  if (uv_is_closing((uv_handle_t*)client))
+    return;
+  int result = uv_try_write(client, &sendbuf, 1);
+  if (result < 0)
+  {
+    LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
+    free(req);
+  }
+}
+
 void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
 {
   if (nread > 0)
@@ -192,10 +242,18 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
       // if (settings->mDataRecvCallback)
       //   settings->mDataRecvCallback(client, buf);
     }
-    else if (pret == -1)  // error
+    else if (pret == -1)  // parse error
+    {
       LOG_WARN("Error parsing http request: %d", pret);
+      send_jsonrpc_error(client, 400, "Parse error");
+      uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    }
     else if (pret <= -2)
+    {
       LOG_WARN("Partial request, replying them to send below %d size", MAX_PACKET_SIZE);
+      send_jsonrpc_error(client, 500, "Server Error Sz");
+      uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    }
   }
   else if (nread < 0)
   {
