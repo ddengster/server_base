@@ -5,6 +5,8 @@
 #include <string>
 #include <unordered_map>
 
+//@future: HTTP pipelining since jobs may complete out of order?
+
 #define NETWORK_DBG 1
 // #define RESTRICT_POST_ONLY 1
 /**
@@ -29,7 +31,6 @@ void server_thread_func(void* userdata);
 // common 'end' callbacks
 void common_write_end_cb(uv_write_t* req, int status);
 
-
 enum JsonRpcResult
 {
   kJsonRpcSuccess = 0,
@@ -50,8 +51,8 @@ struct yyjson_val;
 struct yyjson_mut_doc;
 struct yyjson_mut_val;
 typedef JsonRpcResult (*JsonRpcCallbackFunc)(uv_stream_t* client, int msgid, yyjson_val* params,
-                                             int params_count, yyjson_mut_doc* doc,
-                                             yyjson_mut_val* result);
+                                             int params_count, yyjson_mut_doc** doc,
+                                             yyjson_mut_val** result);
 
 inline uint32_t Hash(const char* str)
 {

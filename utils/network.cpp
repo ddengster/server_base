@@ -266,12 +266,15 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
     JsonRpcCallbackFunc cb = (JsonRpcCallbackFunc)itr->second;
     if (cb)
     {
-      yyjson_mut_doc* result_doc = yyjson_mut_doc_new(NULL);
-      yyjson_mut_val* result = yyjson_mut_obj(result_doc);
+      yyjson_mut_doc* result_doc = nullptr;
+      yyjson_mut_val* result = nullptr;
 
-      JsonRpcResult ret = cb(client, id_num, params, params_count, result_doc, result);
+      JsonRpcResult ret = cb(client, id_num, params, params_count, &result_doc, &result);
       if (ret == kJsonRpcSuccess)
+      {
         send_jsonrpc_response(client, msg_id, result_doc, result);
+        yyjson_mut_doc_free(result_doc);
+      }
       else if (ret == kJsonRpcInvalidParams)
       {
         char errmsg[64] = {};
@@ -282,12 +285,10 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
         send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
       else if (ret == kJsonRpcInternalPending)
       {
-        LOG("Letting job handle sends..");
+        LOG("Async job, letting it handle sends..");
       }
       else
         send_jsonrpc_error(client, ret, "Internal error", msg_id);
-
-      yyjson_mut_doc_free(result_doc);
     }
   }
   else

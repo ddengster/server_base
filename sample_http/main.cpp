@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
       strcpy(settings[i].mPath, "/api/v0");
 
       auto subtract_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
-                              yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
+                              yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
       {
         // clang-format off
         /*
@@ -79,18 +79,21 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        *doc = yyjson_mut_doc_new(NULL);
+        *result = yyjson_mut_obj(*doc);
+
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
         LOG_INFO("%.2f, %.2f", param1, param2);
 
-        yyjson_mut_obj_add_double(doc, result, "difference", param1 - param2);
+        yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
 
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("subtract"), subtract_func);
 
       auto add_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
-                         yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
+                         yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
       {
         (void)client;
         (void)msgid;
@@ -100,19 +103,22 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        *doc = yyjson_mut_doc_new(NULL);
+        *result = yyjson_mut_obj(*doc);
+
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
         LOG_INFO("%.2f, %.2f", param1, param2);
 
-        yyjson_mut_obj_add_double(doc, result, "difference", param1 - param2);
-        yyjson_mut_obj_add_double(doc, result, "sum", param1 + param2);
+        yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
+        yyjson_mut_obj_add_double(*doc, *result, "sum", param1 + param2);
 
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("add"), add_func);
 
       auto heavyload_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
-                               yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
+                               yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
       {
         (void)doc;
         (void)result;
