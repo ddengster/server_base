@@ -45,45 +45,6 @@ void tcp_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
     free(buf->base);
 }
 
-#if 0
-void tcp_on_read_job_handover(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
-{
-  if (nread > 0)
-  {
-    LOG("Received %d bytes: %.*s\n", (int)nread, nread, buf->base);
-    // hand over to thread pool
-    struct Job
-    {
-      uv_work_t work_req;     // Libuv work request wrapper (MUST be first)
-      uv_stream_t* client;    // Pointer to the client socket
-      char* data_buffer;      // Copied data payload for background processing
-      ssize_t data_len;       // Length of the data payload
-      int processing_result;  // Output status/result from background work
-    };
-    Job* job = new Job();
-    job->data_buffer = buf->base;
-    job->data_len = nread;
-    job->work_req.data = job;
-
-    client->data;
-
-    // Offload the worker function to the background thread pool
-    // the 'after_work_cb' is executed on the event loop
-    uv_queue_work(client->loop, &job->work_req, heavy_processing_worker, after_heavy_processing);
-  }
-
-  if (nread < 0)
-  {
-    if (nread != UV_EOF)
-      LOG_WARN("Read error %s\n", uv_strerror(nread));
-
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
-  }
-  if (buf->base)
-    free(buf->base);
-}
-#endif
-
 void tcp_on_new_connection(uv_stream_t* server, int status)
 {
   if (status < 0)
@@ -169,7 +130,7 @@ void common_write_end_cb(uv_write_t* req, int status)
   free(req);
 }
 
-static void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id)
+void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id)
 {
   //@note: prompt "json rpc errors" for error codes
   yyjson_mut_doc* doc = yyjson_mut_doc_new(NULL);
@@ -215,8 +176,8 @@ static void send_jsonrpc_error(uv_stream_t* client, int code, const char* messag
   }
 }
 
-static void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
-                                  yyjson_mut_val* result)
+void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
+                           yyjson_mut_val* result)
 {
   yyjson_mut_val* root = yyjson_mut_obj(doc);
   yyjson_mut_doc_set_root(doc, root);
@@ -308,7 +269,7 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
       yyjson_mut_doc* result_doc = yyjson_mut_doc_new(NULL);
       yyjson_mut_val* result = yyjson_mut_obj(result_doc);
 
-      JsonRpcResult ret = cb(client, params, params_count, result_doc, result);
+      JsonRpcResult ret = cb(client, id_num, params, params_count, result_doc, result);
       if (ret == kJsonRpcSuccess)
         send_jsonrpc_response(client, msg_id, result_doc, result);
       else if (ret == kJsonRpcInvalidParams)
@@ -319,6 +280,10 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
       }
       else if (ret == kJsonRpcInternalError)
         send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
+      else if (ret == kJsonRpcInternalPending)
+      {
+        LOG("Letting job handle sends..");
+      }
       else
         send_jsonrpc_error(client, ret, "Internal error", msg_id);
 

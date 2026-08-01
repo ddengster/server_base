@@ -39,17 +39,19 @@ enum JsonRpcResult
   kJsonRpcMethodNotFound = -32601,
   kJsonRpcInvalidParams = -32602,
   kJsonRpcInternalError = -32603,
-  kJsonRpcServerError = -32000
+  kJsonRpcServerError = -32000,
+
+  // specialized return for server to not do anything
+  kJsonRpcInternalPending = -32100  // pending
 };
 
 
 struct yyjson_val;
 struct yyjson_mut_doc;
 struct yyjson_mut_val;
-typedef JsonRpcResult (*JsonRpcCallbackFunc)(uv_stream_t* client, yyjson_val* params,
+typedef JsonRpcResult (*JsonRpcCallbackFunc)(uv_stream_t* client, int msgid, yyjson_val* params,
                                              int params_count, yyjson_mut_doc* doc,
                                              yyjson_mut_val* result);
-
 
 inline uint32_t Hash(const char* str)
 {
@@ -60,6 +62,9 @@ inline uint32_t Hash(const char* str)
   return hash;
 }
 
+void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id);
+void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
+                           yyjson_mut_val* result);
 
 struct HTTPServerSettings
 {
