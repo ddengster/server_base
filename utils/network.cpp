@@ -357,10 +357,9 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
                                  &minor_version, headers, &num_headers, prev_buf_len);
     if (pret > 0)  // success
     {
-      LOG("SUCCESS: method: %.*s, path: %.*s, ", method_len, method, path_len, path);
+      LOG("Parsed: method: %.*s, path: %.*s, ", method_len, method, path_len, path);
+
       auto settings = (HTTPServerSettings*)client->data;
-      // if (settings->mDataRecvCallback)
-      //   settings->mDataRecvCallback(client, buf);
 #ifdef RESTRICT_POST_ONLY
       if (strncmp(method, "POST", method_len) != 0)
       {
@@ -369,6 +368,13 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
       }
       else
 #endif
+        if (strncmp(settings->mPath, path, strlen(settings->mPath)) != 0)
+      {
+        LOG_WARN("Wrong path");
+        send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Wrong Path", nullptr);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      }
+      else
       {
         const char* body = buf->base + pret;
         size_t body_len = (size_t)(nread - pret);

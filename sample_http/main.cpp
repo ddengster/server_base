@@ -61,10 +61,16 @@ int main(int argc, char* argv[])
     {
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
+      strcpy(settings[i].mPath, "/api/v0");
 
       auto subtract_func = [](uv_stream_t* client, yyjson_val* params, int params_count,
                               yyjson_mut_doc* doc, yyjson_mut_val* result) -> JsonRpcResult
       {
+        // clang-format off
+        /*
+        curl -X POST http://localhost:8081/api/v0 -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}'
+        */
+        // clang-format on
         (void)client;
         if (params_count != 2)
           return kJsonRpcInvalidParams;
@@ -102,6 +108,7 @@ int main(int argc, char* argv[])
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("add"), add_func);
+
 
       uv_thread_create(&thread[i], http_server_thread_func, &settings[i]);
     }

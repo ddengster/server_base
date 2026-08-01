@@ -66,6 +66,7 @@ struct HTTPServerSettings
   const char* mIPAddress = nullptr;
   int mPort = 0;
   int mBacklogQueueSz = SOMAXCONN;
+  char mPath[32] = "/";
 
   std::unordered_map<uint32_t, JsonRpcCallbackFunc> mRpcCallbacks;
 };
