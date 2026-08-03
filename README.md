@@ -5,7 +5,7 @@ Common code libraries and setups for distributed system server nodes put behind 
 
 Ideally the reverse proxies will do the security and rate limitations for you, saving you dev time to focus on other things.
 
-Dependency on libuv for timers, sockets/udp/tcp, events and threading.
+Dependency on libuv for timers, sockets/udp/tcp, event loops and threading.
 
 # Modules
 
@@ -13,7 +13,7 @@ Dependency on libuv for timers, sockets/udp/tcp, events and threading.
 
 - alt_program: TCP Client
 
-- sameple_http_server: Sample http server supporting only [JSONRPC](https://www.jsonrpc.org/) capability
+- sample_http_server: Sample http server supporting only [JSONRPC](https://www.jsonrpc.org/) capability
 
 # Building
 
@@ -58,23 +58,15 @@ Linux
 
 # Features
 
-## Sample
-
-- Basic program forking 4 child process with the master process restarting them if they crash, ensuring fault tolerance.
-
-- The 4 child processes then listen on port and handle 
-
-## Dependencies/Utilities
-
-- Server Logging
+- Server Logging with automated rotations
 
 - Http parser [picohttpparser] (https://github.com/h2o/picohttpparser)
 
-- Json Parser/Serializer
+- Json Parser/Serializer (yyjson)
 
-- libuv tcp/http server setups
+- [TODO] instructions for profiling at the task level, api call to generate profiler data (uv_hrtime, https://docs.libuv.org/en/v1.x/metrics.html)
 
-- instructions for profiling at the task level, api call to generate profiler data (uv_hrtime, https://docs.libuv.org/en/v1.x/metrics.html)
+- tcp/http server setups, with asynchronous jobs
 
 # Good overheads to know before optimizing
 
