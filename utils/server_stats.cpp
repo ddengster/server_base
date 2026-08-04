@@ -101,28 +101,40 @@ int GenerateStatsHTMLPage(char (&buffer)[8192])
 
   pthread_mutex_lock(&gPerfMutex);
 
+  n += snprintf(buffer + n, sizeof(buffer) - (size_t)n,
+                "<table>"
+                "<tr>"
+                "<th>API</th>"
+                "<th>Calls</th>"
+                "<th>Avg time</th>"
+                "<th>Max time</th>"
+                "<th>Total time</th>");
+
+  for (int b = 0; b < kNumTimingBuckets; ++b)
+    n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "<th>%s</th>", bucketnames[b]);
+
+  n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "</tr>");
+
   for (size_t i = 0; i < gPerfRecords.size(); ++i)
   {
     PerfRecord& rec = gPerfRecords[i];
 
     n += snprintf(buffer + n, sizeof(buffer) - (size_t)n,
-                  "<h2>%s</h2>"
-                  "<table>"
-                  "<tr><th>Metric</th><th>Value</th></tr>"
-                  "<tr><td>Calls</td><td>%d</td></tr>"
-                  "<tr><td>Avg time</td><td>%.3f ms</td></tr>"
-                  "<tr><td>Max time</td><td>%.3f ms</td></tr>"
-                  "<tr><td>Total time</td><td>%.3f ms</td></tr>",
+                  "<tr>"
+                  "<td>%s</td>"
+                  "<td>%d</td>"
+                  "<td>%.3f ms</td>"
+                  "<td>%.3f ms</td>"
+                  "<td>%.3f ms</td>",
                   rec.mName, rec.mCalls, rec.mAverage, rec.mMax, rec.mSum);
 
     for (int b = 0; b < kNumTimingBuckets; ++b)
-    {
-      n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "<tr><td>%s</td><td>%d</td></tr>",
-                    bucketnames[b], rec.mHistogram[b]);
-    }
+      n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "<td>%d</td>", rec.mHistogram[b]);
 
-    n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "</table>");
+    n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "</tr>");
   }
+
+  n += snprintf(buffer + n, sizeof(buffer) - (size_t)n, "</table>");
 
   pthread_mutex_unlock(&gPerfMutex);
 

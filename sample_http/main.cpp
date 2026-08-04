@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
         LOG_INFO("%.2f, %.2f", param1, param2);
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
-        TIMER_END("subtract", true);
+        TIMER_END("subtract", false);
 
         return kJsonRpcSuccess;
       };
@@ -99,6 +99,11 @@ int main(int argc, char* argv[])
       auto add_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
                          yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
       {
+        /*
+        curl -X POST http://localhost:8081/api/v0 -H "Content-Type: application/json" -d
+        '{"jsonrpc": "2.0", "method": "add", "params": [42, 23], "id": 1}'
+        */
+
         (void)client;
         (void)msgid;
         if (params_count != 2)
@@ -107,6 +112,7 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        TIMER_START();
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
 
@@ -116,6 +122,7 @@ int main(int argc, char* argv[])
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
         yyjson_mut_obj_add_double(*doc, *result, "sum", param1 + param2);
+        TIMER_END("add", false);
 
         return kJsonRpcSuccess;
       };
