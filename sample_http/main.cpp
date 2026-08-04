@@ -61,7 +61,8 @@ int main(int argc, char* argv[])
     {
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
-      strcpy(settings[i].mPath, "/api/v0");
+      strcpy(settings[i].mJsonRpcPath, "/api/v0");
+      settings[i].ComputeJsonRpcPathHash();
 
       auto subtract_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
                               yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
@@ -194,6 +195,76 @@ int main(int argc, char* argv[])
       };
       settings[i].mRpcCallbacks.emplace(Hash("heavyload"), heavyload_func);
 
+
+      auto stats_func = [](uv_stream_t* client) -> int
+      {
+        // clang-format off
+        /*
+        curl http://localhost:8081/stats
+        */
+        // clang-format on
+        const char* html = "<!DOCTYPE html>"
+                           "<html>"
+                           "<head>"
+                           "<title>Server Performance Statistics</title>"
+                           "<style>"
+                           "body { font-family: Arial, sans-serif; margin: 40px; }"
+                           "table { border-collapse: collapse; width: 100%; }"
+                           "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
+                           "th { background-color: #f2f2f2; }"
+                           "tr:nth-child(even) { background-color: #f9f9f9; }"
+                           "</style>"
+                           "</head>"
+                           "<body>"
+                           "<h1>Server Performance Statistics</h1>"
+                           "<table>"
+                           "<tr><th>Metric</th><th>Value</th></tr>"
+                           "<tr><td>Requests served</td><td>1048576</td></tr>"
+                           "<tr><td>Avg response time</td><td>2.4 ms</td></tr>"
+                           "<tr><td>Peak throughput</td><td>15234 req/s</td></tr>"
+                           "<tr><td>Active connections</td><td>42</td></tr>"
+                           "<tr><td>CPU usage</td><td>17.3%</td></tr>"
+                           "<tr><td>Memory usage</td><td>356 MB</td></tr>"
+                           "</table>"
+                           "</body>"
+                           "</html>";
+
+        size_t html_len = strlen(html);
+
+        char buf[2048] = {};
+        int len = snprintf(buf, sizeof(buf),
+                           "HTTP/1.1 200 OK\r\n"
+                           "Content-Type: text/html\r\n"
+                           "Content-Length: %zu\r\n"
+                           "Connection: close\r\n"
+                           "\r\n"
+                           "%s",
+                           html_len, html);
+        if (len < 0 || (size_t)len >= sizeof(buf))
+        {
+          LOG_WARN("stats: response buffer too small\n");
+          return -1;
+        }
+
+        uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        req->data = client;
+
+        char* b = (char*)malloc((size_t)len + 1);
+        strncpy(b, buf, (size_t)len + 1);
+
+        uv_buf_t sendbuf = uv_buf_init(b, (size_t)len + 1);
+        int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+        if (result < 0)
+        {
+          LOG_WARN("stats: failed to initiate write: %s\n", uv_strerror(result));
+          free(req);
+        }
+        return result;
+      };
+      settings[i].mPathCallbacks.emplace(Hash("/stats"), stats_func);
+
+
+      // make thread
       uv_thread_create(&thread[i], http_server_thread_func, &settings[i]);
     }
 

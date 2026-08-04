@@ -46,6 +46,7 @@ enum JsonRpcResult
   kJsonRpcInternalPending = -32100  // pending
 };
 
+typedef int (*PathCallbackFunc)(uv_stream_t* client);
 
 struct yyjson_val;
 struct yyjson_mut_doc;
@@ -72,9 +73,13 @@ struct HTTPServerSettings
   const char* mIPAddress = nullptr;
   int mPort = 0;
   int mBacklogQueueSz = SOMAXCONN;
-  char mPath[32] = "/";
+  char mJsonRpcPath[32] = "/";
+  uint mJsonRpcPathHash = 0;
 
+  std::unordered_map<uint32_t, PathCallbackFunc> mPathCallbacks;
   std::unordered_map<uint32_t, JsonRpcCallbackFunc> mRpcCallbacks;
+
+  void ComputeJsonRpcPathHash() { mJsonRpcPathHash = Hash(mJsonRpcPath); }
 };
 
 // entry point for a server. userdata is expected to be type TCPServerSettings

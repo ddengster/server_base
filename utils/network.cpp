@@ -326,25 +326,44 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
       LOG("Parsed: method: %.*s, path: %.*s, ", method_len, method, path_len, path);
 
       auto settings = (HTTPServerSettings*)client->data;
+
+      char pathbuf[64] = {};
+      strncpy(pathbuf, path, path_len);
+      uint req_path_hash = Hash(pathbuf);
+
+      auto path_itr = settings->mPathCallbacks.find(req_path_hash);
+      if (path_itr != settings->mPathCallbacks.end())
+      {
+        PathCallbackFunc cb = path_itr->second;
+        if (cb)
+        {
+          cb(client);
+          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        }
+      }
+      else
+      {
 #ifdef RESTRICT_POST_ONLY
-      if (strncmp(method, "POST", method_len) != 0)
-      {
-        send_jsonrpc_error(client, 400, "Incorrect HTTP method (use POST)", nullptr);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
-      }
-      else
+        if (strncmp(method, "POST", method_len) != 0)
+        {
+          send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Incorrect HTTP method (use POST)",
+                             nullptr);
+          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        }
+        else
 #endif
-        if (strncmp(settings->mPath, path, strlen(settings->mPath)) != 0)
-      {
-        LOG_WARN("Wrong path");
-        send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Wrong Path", nullptr);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
-      }
-      else
-      {
-        const char* body = buf->base + pret;
-        size_t body_len = (size_t)(nread - pret);
-        handle_jsonrpc_request(client, body, body_len, settings);
+          if (settings->mJsonRpcPathHash == req_path_hash)
+        {
+          const char* body = buf->base + pret;
+          size_t body_len = (size_t)(nread - pret);
+          handle_jsonrpc_request(client, body, body_len, settings);
+        }
+        else
+        {
+          LOG_WARN("Wrong path");
+          send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Wrong Path", nullptr);
+          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        }
       }
     }
     else if (pret == -1)  // parse error
