@@ -55,9 +55,9 @@ typedef JsonRpcResult (*JsonRpcCallbackFunc)(uv_stream_t* client, int msgid, yyj
                                              int params_count, yyjson_mut_doc** doc,
                                              yyjson_mut_val** result);
 
-inline uint32_t Hash(const char* str)
+inline uint Hash(const char* str)
 {
-  uint32_t hash = 5381;
+  uint hash = 5381;
   int c;
   while ((c = *str++))
     hash = ((hash << 5) + hash) + c;  // hash * 33 + c
@@ -76,8 +76,8 @@ struct HTTPServerSettings
   char mJsonRpcPath[32] = "/";
   uint mJsonRpcPathHash = 0;
 
-  std::unordered_map<uint32_t, PathCallbackFunc> mPathCallbacks;
-  std::unordered_map<uint32_t, JsonRpcCallbackFunc> mRpcCallbacks;
+  std::unordered_map<uint, PathCallbackFunc> mPathCallbacks;
+  std::unordered_map<uint, JsonRpcCallbackFunc> mRpcCallbacks;
 
   void ComputeJsonRpcPathHash() { mJsonRpcPathHash = Hash(mJsonRpcPath); }
 };
