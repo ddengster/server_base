@@ -1,4 +1,6 @@
 
+![Stats Page](docs/stats_page.PNG)
+
 # About
 
 Common code libraries and setups for distributed system server nodes put behind reverse proxies.
@@ -64,7 +66,7 @@ Linux
 
 - Json Parser/Serializer (yyjson)
 
-- [TODO] instructions for profiling at the task level, api call to generate profiler data (uv_hrtime, https://docs.libuv.org/en/v1.x/metrics.html)
+- Performance statistics html page generation and performance measuring/tracking
 
 - tcp/http server setups, with asynchronous jobs
 
