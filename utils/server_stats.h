@@ -39,11 +39,7 @@ struct PerfRecord
 uint AddPerfRecord(const char* name);  // returns index
 PerfRecord* GetPerfRecord(uint idx);   // do not store return
 
-struct PerfStatistics
-{
-  std::atomic<uint> mAcceptedPaths = 0;
-  std::atomic<uint> mRejectedPaths = 0;
-};
+int GenerateStatsHTMLPage(char (&buffer)[8192]);
 
 #ifdef HIGHRES_TIMER
 
@@ -61,9 +57,14 @@ struct PerfStatistics
 #else
 
 #define TIMER_START() uint64_t ts_start = uv_now();
-#define TIMER_ENDLOG(markername)         \
-  uint64_t ts_end = uv_now();            \
-  double ms = (ts_end - ts_start) / 1e6; \
-  LOG_INFO(#markername " time taken: %fms", ms);
+#define TIMER_END(markername, log_timetaken)  \
+  uint64_t ts_end = uv_now();                 \
+  double ms = (ts_end - ts_start) / 1e6;      \
+  static int idx = AddPerfRecord(markername); \
+  auto perf_record = GetPerfRecord(idx);      \
+  perf_record->Update(ms);                    \
+  if (log_timetaken)                          \
+    LOG_INFO(#markername " time taken: %fms", ms);
+
 
 #endif

@@ -203,59 +203,32 @@ int main(int argc, char* argv[])
       {
         // clang-format off
         /*
-        curl http://localhost:8081/stats
+        web browser http://localhost:8081/stats
         */
         // clang-format on
-        const char* html = "<!DOCTYPE html>"
-                           "<html>"
-                           "<head>"
-                           "<title>Server Performance Statistics</title>"
-                           "<style>"
-                           "body { font-family: Arial, sans-serif; margin: 40px; }"
-                           "table { border-collapse: collapse; width: 100%; }"
-                           "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
-                           "th { background-color: #f2f2f2; }"
-                           "tr:nth-child(even) { background-color: #f9f9f9; }"
-                           "</style>"
-                           "</head>"
-                           "<body>"
-                           "<h1>Server Performance Statistics</h1>"
-                           "<table>"
-                           "<tr><th>Metric</th><th>Value</th></tr>"
-                           "<tr><td>Requests served</td><td>1048576</td></tr>"
-                           "<tr><td>Avg response time</td><td>2.4 ms</td></tr>"
-                           "<tr><td>Peak throughput</td><td>15234 req/s</td></tr>"
-                           "<tr><td>Active connections</td><td>42</td></tr>"
-                           "<tr><td>CPU usage</td><td>17.3%</td></tr>"
-                           "<tr><td>Memory usage</td><td>356 MB</td></tr>"
-                           "</table>"
-                           "</body>"
-                           "</html>";
 
-        size_t html_len = strlen(html);
+        char buffer[8192] = {};
+        int len = GenerateStatsHTMLPage(buffer);
 
-        char buf[2048] = {};
-        int len = snprintf(buf, sizeof(buf),
-                           "HTTP/1.1 200 OK\r\n"
-                           "Content-Type: text/html\r\n"
-                           "Content-Length: %zu\r\n"
-                           "Connection: close\r\n"
-                           "\r\n"
-                           "%s",
-                           html_len, html);
-        if (len < 0 || (size_t)len >= sizeof(buf))
-        {
-          LOG_WARN("stats: response buffer too small\n");
-          return -1;
-        }
+        char response[9216] = {};
+        int response_len = snprintf(response, sizeof(response),
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: text/html\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n"
+                                    "%s\r\n",
+                                    len, buffer);
 
         uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
         req->data = client;
 
-        char* b = (char*)malloc((size_t)len + 1);
-        strncpy(b, buf, (size_t)len + 1);
+        size_t sz = (size_t)response_len + 1;
+        char* b = (char*)malloc(sz);
+        memset(b, 0, sz);
+        strncpy(b, response, sz);
 
-        uv_buf_t sendbuf = uv_buf_init(b, (size_t)len + 1);
+        uv_buf_t sendbuf = uv_buf_init(b, sz);
         int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
         if (result < 0)
         {

@@ -72,8 +72,6 @@ struct HTTPServerSettings
   std::unordered_map<uint, PathCallbackFunc> mPathCallbacks;
   std::unordered_map<uint, JsonRpcCallbackFunc> mRpcCallbacks;
 
-  PerfStatistics mStatistics;
-
   void ComputeJsonRpcPathHash() { mJsonRpcPathHash = Hash(mJsonRpcPath); }
 };
 
