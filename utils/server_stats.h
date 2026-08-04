@@ -3,8 +3,6 @@
 
 #include "prereqs.h"
 #include "logger.h"
-#include <atomic>
-
 
 #define HIGHRES_TIMER 1
 
