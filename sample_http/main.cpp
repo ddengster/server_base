@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "network.h"
 #include "yyjson.h"
+#include "server_stats.h"
 
 const char* gProcessName = "sample_http";
 
@@ -61,7 +62,8 @@ int main(int argc, char* argv[])
     {
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
-      strcpy(settings[i].mPath, "/api/v0");
+      strcpy(settings[i].mJsonRpcPath, "/api/v0");
+      settings[i].ComputeJsonRpcPathHash();
 
       auto subtract_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
                               yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
@@ -79,6 +81,7 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        TIMER_START();
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
 
@@ -87,6 +90,7 @@ int main(int argc, char* argv[])
         LOG_INFO("%.2f, %.2f", param1, param2);
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
+        TIMER_END("subtract", false);
 
         return kJsonRpcSuccess;
       };
@@ -95,6 +99,11 @@ int main(int argc, char* argv[])
       auto add_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
                          yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
       {
+        /*
+        curl -X POST http://localhost:8081/api/v0 -H "Content-Type: application/json" -d
+        '{"jsonrpc": "2.0", "method": "add", "params": [42, 23], "id": 1}'
+        */
+
         (void)client;
         (void)msgid;
         if (params_count != 2)
@@ -103,6 +112,7 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        TIMER_START();
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
 
@@ -112,6 +122,7 @@ int main(int argc, char* argv[])
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
         yyjson_mut_obj_add_double(*doc, *result, "sum", param1 + param2);
+        TIMER_END("add", false);
 
         return kJsonRpcSuccess;
       };
@@ -194,6 +205,49 @@ int main(int argc, char* argv[])
       };
       settings[i].mRpcCallbacks.emplace(Hash("heavyload"), heavyload_func);
 
+
+      auto stats_func = [](uv_stream_t* client) -> int
+      {
+        // clang-format off
+        /*
+        web browser http://localhost:8081/stats
+        */
+        // clang-format on
+
+        char buffer[8192] = {};
+        int len = GenerateStatsHTMLPage(buffer);
+
+        char response[9216] = {};
+        int response_len = snprintf(response, sizeof(response),
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: text/html\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n"
+                                    "%s\r\n",
+                                    len, buffer);
+
+        uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        req->data = client;
+
+        size_t sz = (size_t)response_len + 1;
+        char* b = (char*)malloc(sz);
+        memset(b, 0, sz);
+        strncpy(b, response, sz);
+
+        uv_buf_t sendbuf = uv_buf_init(b, sz);
+        int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+        if (result < 0)
+        {
+          LOG_WARN("stats: failed to initiate write: %s\n", uv_strerror(result));
+          free(req);
+        }
+        return result;
+      };
+      settings[i].mPathCallbacks.emplace(Hash("/stats"), stats_func);
+
+
+      // make thread
       uv_thread_create(&thread[i], http_server_thread_func, &settings[i]);
     }
 
