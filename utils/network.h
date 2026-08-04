@@ -1,9 +1,11 @@
 
 #pragma once
 
+#include "prereqs.h"
 #include <uv.h>
 #include <string>
 #include <unordered_map>
+#include "server_stats.h"
 
 //@future: HTTP pipelining since jobs may complete out of order?
 
@@ -55,15 +57,6 @@ typedef JsonRpcResult (*JsonRpcCallbackFunc)(uv_stream_t* client, int msgid, yyj
                                              int params_count, yyjson_mut_doc** doc,
                                              yyjson_mut_val** result);
 
-inline uint Hash(const char* str)
-{
-  uint hash = 5381;
-  int c;
-  while ((c = *str++))
-    hash = ((hash << 5) + hash) + c;  // hash * 33 + c
-  return hash;
-}
-
 void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id);
 void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
                            yyjson_mut_val* result);
@@ -78,6 +71,8 @@ struct HTTPServerSettings
 
   std::unordered_map<uint, PathCallbackFunc> mPathCallbacks;
   std::unordered_map<uint, JsonRpcCallbackFunc> mRpcCallbacks;
+
+  PerfStatistics mStatistics;
 
   void ComputeJsonRpcPathHash() { mJsonRpcPathHash = Hash(mJsonRpcPath); }
 };

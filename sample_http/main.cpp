@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "network.h"
 #include "yyjson.h"
+#include "server_stats.h"
 
 const char* gProcessName = "sample_http";
 
@@ -80,6 +81,7 @@ int main(int argc, char* argv[])
             yyjson_get_type(yyjson_arr_get(params, 1)) != YYJSON_TYPE_NUM)
           return kJsonRpcInvalidParams;
 
+        TIMER_START();
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
 
@@ -88,6 +90,7 @@ int main(int argc, char* argv[])
         LOG_INFO("%.2f, %.2f", param1, param2);
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
+        TIMER_END("subtract", true);
 
         return kJsonRpcSuccess;
       };
