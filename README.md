@@ -17,6 +17,8 @@ Dependency on libuv for timers, sockets/udp/tcp, event loops and threading.
 
 - sample_http_server: Sample http server supporting only [JSONRPC](https://www.jsonrpc.org/) capability
 
+- auth_server: Sample authentication server with login endpoint and restricted endpoint, using JWT for authentication
+
 # Building
 
 ### Prerequisites
@@ -27,7 +29,7 @@ Development with WSL
 
 Linux
 
-- `apt-get` packages: g++, make, build-essentials, libuv1-dev
+- `apt-get` packages: g++, make, build-essentials, libuv1-dev, [libjwt-dev](https://github.com/benmcollins/libjwt) (for `auth_server`)
 
 - `apt-get install libuv1-dbgsym` for debugging libuv
 
@@ -62,13 +64,15 @@ Linux
 
 - Server Logging with automated rotations
 
-- Http parser [picohttpparser] (https://github.com/h2o/picohttpparser)
+- Http parser [picohttpparser](https://github.com/h2o/picohttpparser)
 
 - Json Parser/Serializer (yyjson)
 
 - Performance statistics html page generation and performance measuring/tracking
 
 - tcp/http server setups, with asynchronous jobs
+
+- Authentication using JWT, check `auth_server`
 
 # Good overheads to know before optimizing
 

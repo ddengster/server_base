@@ -285,7 +285,9 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
         send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
       else if (ret == kJsonRpcInternalPending)
       {
+#ifdef NETWORK_DBG
         LOG("Async job, letting it handle sends..");
+#endif
       }
       else
         send_jsonrpc_error(client, ret, "Internal error", msg_id);
