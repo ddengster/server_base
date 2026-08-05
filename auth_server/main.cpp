@@ -14,6 +14,7 @@
 #include "network.h"
 #include "yyjson.h"
 #include "server_stats.h"
+#include "security.h"
 
 const char* gProcessName = "auth_server";
 
@@ -62,7 +63,7 @@ int main(int argc, char* argv[])
     {
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
-      strcpy(settings[i].mJsonRpcPath, "/login");
+      strcpy(settings[i].mJsonRpcPath, "/auth");
       settings[i].ComputeJsonRpcPathHash();
 
       // must put this behind a reverse proxy that handles SSL and rate limits for you
@@ -71,7 +72,7 @@ int main(int argc, char* argv[])
       {
         // clang-format off
         /*
-        curl -X POST http://localhost:8081/login -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "login", "params": ["hashed_pwd"], "id": 1}'
+        curl -X POST http://localhost:8081/auth -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "login", "params": ["hashed_pwd"], "id": 1}'
         */
         // clang-format on
         (void)client;
@@ -83,25 +84,28 @@ int main(int argc, char* argv[])
 
         TIMER_START();
 
-        // IMPLEMENT THIS: check with the database for hashed pwd
-        bool hashed_pwd_verified = true;
+        // IMPLEMENT THIS: check with the database for user + hashed pwd
+        bool user_access_granted = true;
         uint userid = 12345;  // retreived from db
 
         //  issue a JWT Token
-        if (!hashed_pwd_verified)
+        if (!user_access_granted)
           return kJsonRpcInternalError;
+
+        const char* access_token = GenerateSignedJWT(userid);
+        if (!access_token)
+          return kJsonRpcInternalError;
+        LOG_INFO(access_token);
 
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
 
-        const char* access_token = nullptr;
-
         yyjson_mut_obj_add_str(*doc, *result, "access_token", access_token);
         yyjson_mut_obj_add_str(*doc, *result, "token_type", "Bearer");
-        yyjson_mut_obj_add_double(*doc, *result, "expires_in", 60 * 60 * 24);  // 24h
+        //@note: if this were a proper web browser request you put the access token in the
+        // http response Set-Cookie header.
 
-
-        TIMER_END("login", false);
+        TIMER_END("login", true);
 
         return kJsonRpcSuccess;
       };
@@ -114,15 +118,47 @@ int main(int argc, char* argv[])
       {
         // clang-format off
         /*
-        curl -X POST http://localhost:8081/restricted -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "login", "params": [], "id": 2}'
+        curl -X POST http://localhost:8081/auth -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "restricted", "params": ["<paste token here>"], "id": 2}'
         */
         // clang-format on
         (void)client;
         (void)msgid;
-        if (params_count != 0)
+        if (params_count != 1)
+          return kJsonRpcInvalidParams;
+        if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_STR)
           return kJsonRpcInvalidParams;
 
+        //@note: if this were a proper web browser request you should retrieve the access token in
+        // the http request's Cookie header.
 
+        TIMER_START();
+        *doc = yyjson_mut_doc_new(NULL);
+        *result = yyjson_mut_obj(*doc);
+
+        //@note: you should be putting the here
+        const char* token_str = yyjson_get_str(yyjson_arr_get(params, 0));
+        int userid = -1;
+        bool expired = false;
+        bool verified = VerifySignedJWT(token_str, &userid, &expired);
+
+        if (!verified)
+        {
+          yyjson_mut_obj_add_str(*doc, *result, "result", "Failed verification");
+          return kJsonRpcSuccess;
+        }
+
+        if (expired)
+        {
+          yyjson_mut_obj_add_str(*doc, *result, "result", "Expired");
+          return kJsonRpcSuccess;
+        }
+
+        // do work..
+
+        // send reply
+        yyjson_mut_obj_add_str(*doc, *result, "result", "Success");
+
+        TIMER_END("restricted", true);
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("restricted"), restricted_func);
