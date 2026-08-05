@@ -62,7 +62,7 @@ Linux
 
 - Server Logging with automated rotations
 
-- Http parser [picohttpparser] (https://github.com/h2o/picohttpparser)
+- Http parser [picohttpparser](https://github.com/h2o/picohttpparser)
 
 - Json Parser/Serializer (yyjson)
 
