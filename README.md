@@ -19,6 +19,8 @@ Dependency on libuv for timers, sockets/udp/tcp, event loops and threading.
 
 - auth_server: Sample authentication server with login endpoint and restricted endpoint, using JWT for authentication
 
+- prometheous_test: sample server endpoint for prometheus monitoring tools
+
 # Building
 
 ### Prerequisites
