@@ -1,7 +1,7 @@
 INC_DIRS := ../utils
 CXX := g++
 CXXFLAGS := -Wall -Wextra -std=c++17 -g -I$(INC_DIRS)
-LDFLAGS := -luv
+LDFLAGS := -luv -ljwt
 TARGET := sample_server
 SRCS := $(wildcard *.cpp *.c) $(wildcard ../utils/*.cpp ../utils/*.c)
 
