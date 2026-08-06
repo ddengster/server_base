@@ -38,6 +38,7 @@ uint AddPerfRecord(const char* name);  // returns index
 PerfRecord* GetPerfRecord(uint idx);   // do not store return
 
 int GenerateStatsHTMLPage(char (&buffer)[8192]);
+int GeneratePrometheusMetricsText(char (&buffer)[8192]);
 
 #ifdef HIGHRES_TIMER
 

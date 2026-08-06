@@ -2,7 +2,7 @@ INC_DIRS := ../utils
 CXX := g++
 CXXFLAGS := -Wall -Wextra -std=c++17 -g -I$(INC_DIRS)
 LDFLAGS := -luv -ljwt
-TARGET := sample_http
+TARGET := prometheus_test
 SRCS := $(wildcard *.cpp *.c) $(wildcard ../utils/*.cpp ../utils/*.c)
 
 $(TARGET): $(SRCS)

@@ -157,7 +157,7 @@ run:
       uv_thread_create(&thread[i], server_thread_func, &settings[i]);
     }
 
-    for (int i = 0; i < 4; ++i)
+    for (uint i = 0; i < num_threads; ++i)
       uv_thread_join(&thread[i]);
     delete[] settings;
     delete[] thread;

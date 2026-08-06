@@ -1,5 +1,5 @@
-# SUBDIRS := alt_program sample_server sample_http auth_server # all projects
-SUBDIRS := auth_server # dev only
+# SUBDIRS := alt_program sample_server sample_http auth_server prometheus_test # all projects
+SUBDIRS := prometheus_test # dev only
 
 .PHONY: all clean $(SUBDIRS) $(SUBDIRS:%=%-clean)
 
