@@ -143,3 +143,71 @@ int GenerateStatsHTMLPage(char (&buffer)[8192])
                 "</html>\r\n");
   return n;
 }
+
+int GeneratePrometheusMetricsText(char (&buffer)[8192])
+{
+  static const char* bucketBounds[kNumTimingBuckets] = {
+      "1", "2", "5", "10", "50", "+Inf"};
+
+  int n = 0;
+  const int bufsize = (int)sizeof(buffer);
+
+  pthread_mutex_lock(&gPerfMutex);
+
+  for (size_t i = 0; i < gPerfRecords.size(); ++i)
+  {
+    if (n >= bufsize)
+      break;
+
+    PerfRecord& rec = gPerfRecords[i];
+
+    n += snprintf(buffer + n, bufsize - n,
+                  "# HELP server_perf_calls_total Total number of calls.\n"
+                  "# TYPE server_perf_calls_total counter\n"
+                  "server_perf_calls_total{api=\"%s\"} %d\n",
+                  rec.mName, rec.mCalls);
+
+    if (n >= bufsize)
+      break;
+
+    n += snprintf(buffer + n, bufsize - n,
+                  "# HELP server_perf_duration_milliseconds_sum Sum of call durations in milliseconds.\n"
+                  "# TYPE server_perf_duration_milliseconds_sum counter\n"
+                  "server_perf_duration_milliseconds_sum{api=\"%s\"} %.3f\n",
+                  rec.mName, rec.mSum);
+
+    if (n >= bufsize)
+      break;
+
+    n += snprintf(buffer + n, bufsize - n,
+                  "# HELP server_perf_duration_milliseconds_max Maximum call duration in milliseconds.\n"
+                  "# TYPE server_perf_duration_milliseconds_max gauge\n"
+                  "server_perf_duration_milliseconds_max{api=\"%s\"} %.3f\n",
+                  rec.mName, rec.mMax);
+
+    if (n >= bufsize)
+      break;
+
+    n += snprintf(buffer + n, bufsize - n,
+                  "# HELP server_perf_duration_milliseconds_bucket Call duration histogram bucket.\n"
+                  "# TYPE server_perf_duration_milliseconds_bucket histogram\n");
+
+    int cumulative = 0;
+    for (int b = 0; b < kNumTimingBuckets; ++b)
+    {
+      if (n >= bufsize)
+        break;
+      cumulative += rec.mHistogram[b];
+      n += snprintf(buffer + n, bufsize - n,
+                    "server_perf_duration_milliseconds_bucket{api=\"%s\",le=\"%s\"} %d\n",
+                    rec.mName, bucketBounds[b], cumulative);
+    }
+
+    if (n < bufsize)
+      n += snprintf(buffer + n, bufsize - n, "\n");
+  }
+
+  pthread_mutex_unlock(&gPerfMutex);
+
+  return n;
+}
