@@ -1,6 +1,8 @@
 
 ![Stats Page](docs/stats_page.PNG)
 
+![Stats Page login](docs/login_stats.PNG)
+
 # About
 
 Common code libraries and setups for distributed system server nodes put behind reverse proxies.

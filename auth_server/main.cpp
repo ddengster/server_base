@@ -95,7 +95,9 @@ int main(int argc, char* argv[])
         const char* access_token = GenerateSignedJWT(userid);
         if (!access_token)
           return kJsonRpcInternalError;
+#ifdef NETWORK_DBG
         LOG_INFO(access_token);
+#endif
 
         *doc = yyjson_mut_doc_new(NULL);
         *result = yyjson_mut_obj(*doc);
@@ -105,7 +107,7 @@ int main(int argc, char* argv[])
         //@note: if this were a proper web browser request you put the access token in the
         // http response Set-Cookie header.
 
-        TIMER_END("login", true);
+        TIMER_END("login", false);
 
         return kJsonRpcSuccess;
       };
@@ -162,6 +164,46 @@ int main(int argc, char* argv[])
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("restricted"), restricted_func);
+
+      auto stats_func = [](uv_stream_t* client) -> int
+      {
+        // clang-format off
+        /*
+        web browser http://localhost:8081/stats
+        */
+        // clang-format on
+
+        char buffer[8192] = {};
+        int len = GenerateStatsHTMLPage(buffer);
+
+        char response[9216] = {};
+        int response_len = snprintf(response, sizeof(response),
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: text/html\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n"
+                                    "%s\r\n",
+                                    len, buffer);
+
+        uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        req->data = client;
+
+        size_t sz = (size_t)response_len + 1;
+        char* b = (char*)malloc(sz);
+        memset(b, 0, sz);
+        strncpy(b, response, sz);
+
+        uv_buf_t sendbuf = uv_buf_init(b, sz);
+        int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
+        if (result < 0)
+        {
+          LOG_WARN("stats: failed to initiate write: %s\n", uv_strerror(result));
+          free(req);
+        }
+        return result;
+      };
+      settings[i].mPathCallbacks.emplace(Hash("/stats"), stats_func);
 
       // make thread
       uv_thread_create(&thread[i], http_server_thread_func, &settings[i]);

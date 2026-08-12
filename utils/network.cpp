@@ -325,8 +325,9 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
                                  &minor_version, headers, &num_headers, prev_buf_len);
     if (pret > 0)  // success
     {
+#ifdef NETWORK_DBG
       LOG("Parsed: method: %.*s, path: %.*s, ", method_len, method, path_len, path);
-
+#endif
       auto settings = (HTTPServerSettings*)client->data;
 
       char pathbuf[64] = {};
@@ -362,7 +363,9 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
         }
         else
         {
+#ifdef NETWORK_DBG
           LOG_WARN("Wrong path");
+#endif
           send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Wrong Path", nullptr);
           uv_close((uv_handle_t*)client, (uv_close_cb)free);
         }
