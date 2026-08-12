@@ -1,6 +1,6 @@
 INC_DIRS := ../utils
 CXX := g++
-CXXFLAGS := -Wall -Wextra -std=c++17 -g -I$(INC_DIRS)
+CXXFLAGS := -Wall -Wextra -std=c++17 -g -I$(INC_DIRS) -O2 -Og
 LDFLAGS := -luv -ljwt
 TARGET := auth_server
 SRCS := $(wildcard *.cpp *.c) $(wildcard ../utils/*.cpp ../utils/*.c)
