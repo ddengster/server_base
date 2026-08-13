@@ -7,8 +7,6 @@
 #include <unordered_map>
 #include "server_stats.h"
 
-//@note: no HTTP pipelining for when jobs may complete out of order
-
 // #define NETWORK_DBG 1
 // #define RESTRICT_POST_ONLY 1
 /**

@@ -274,15 +274,20 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
       {
         send_jsonrpc_response(client, msg_id, result_doc, result);
         yyjson_mut_doc_free(result_doc);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
       }
       else if (ret == kJsonRpcInvalidParams)
       {
         char errmsg[64] = {};
         snprintf(errmsg, sizeof(errmsg), "Invalid params");
         send_jsonrpc_error(client, kJsonRpcInvalidParams, errmsg, msg_id);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
       }
       else if (ret == kJsonRpcInternalError)
+      {
         send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      }
       else if (ret == kJsonRpcInternalPending)
       {
 #ifdef NETWORK_DBG
@@ -290,12 +295,16 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
 #endif
       }
       else
+      {
         send_jsonrpc_error(client, ret, "Internal error", msg_id);
+        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      }
     }
   }
   else
   {
     send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Method not found", msg_id);
+    uv_close((uv_handle_t*)client, (uv_close_cb)free);
   }
 
   free(params_str);
