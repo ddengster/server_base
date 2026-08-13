@@ -73,6 +73,7 @@ int main(int argc, char* argv[])
         // clang-format off
         /*
         curl -X POST http://localhost:8081/auth -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "login", "params": ["hashed_pwd"], "id": 1}'
+        ab -n 1000 -c 10 -p test_data.json -T 'application/json' http://localhost:51151/auth
         */
         // clang-format on
         (void)client;
@@ -121,6 +122,7 @@ int main(int argc, char* argv[])
         // clang-format off
         /*
         curl -X POST http://localhost:8081/auth -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "restricted", "params": ["<paste token here>"], "id": 2}'
+        ab -n 10000 -c 100 -p test_verify.json -T 'application/json' http://localhost:46857/auth
         */
         // clang-format on
         (void)client;
@@ -160,7 +162,7 @@ int main(int argc, char* argv[])
         // send reply
         yyjson_mut_obj_add_str(*doc, *result, "result", "Success");
 
-        TIMER_END("restricted", true);
+        TIMER_END("restricted", false);
         return kJsonRpcSuccess;
       };
       settings[i].mRpcCallbacks.emplace(Hash("restricted"), restricted_func);
