@@ -48,6 +48,8 @@ int main(int argc, char* argv[])
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
+  log_set_async();
+
 #if 1
   {
     // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to
@@ -87,9 +89,8 @@ int main(int argc, char* argv[])
 
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
-#ifdef NETWORK_DBG
+
         LOG_INFO("%.2f, %.2f", param1, param2);
-#endif
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
         TIMER_END("subtract", false);

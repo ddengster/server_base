@@ -8,6 +8,9 @@
 #include <execinfo.h>
 #include <filesystem>
 
+#include <thread>
+#include <vector>
+
 static LogLevel gLogMinLevel = LOG_DEFAULT_LEVEL;
 static FILE* gLogFile = nullptr;
 static int gFlushCacheSz = 8 * 1024;
@@ -17,6 +20,11 @@ static int gLogCountLimit = 30;
 static const char* gLogDir = "logs";
 
 static const char* gLogLevelNames[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+
+static bool gLogAsync = false;
+static std::vector<char*> gAsyncLogBuffer;
+static pthread_mutex_t gAsyncLogMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::thread gAsyncThread;
 
 static char* gFileBuf = nullptr;
 static int gFilePos = 0;
@@ -80,6 +88,28 @@ void log_shutdown()
 void log_childprocess_init()
 { gPid = getpid(); }
 
+static void log_async_thread(void* userdata)
+{
+  // while (timer exceeded 3s OR bufferlimit reached OR terminate is false)
+  {
+    gAsyncLogMutex.lock();
+
+    // drain from gAsyncLogBuffer and output to console + file
+
+
+    gAsyncLogMutex.unlock();
+  }
+}
+
+void log_set_async()
+{
+  if (gLogAsync)
+    return;  // no double-call
+  gLogAsync = true;
+
+  gAsyncThread = std::thread(log_async_thread, nullptr);
+}
+
 void log_flush()
 {
   if (gFilePos > 0 && gLogFile)
@@ -126,7 +156,8 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
   if (level < gLogMinLevel)
     return;
 
-  check_new_log();
+  if (!gLogAsync)
+    check_new_log();
 
   time_t t = time(NULL);
   struct tm utc_tm;
@@ -156,19 +187,31 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
   int max_char_count = 15;
   const char* filelog_shortened = len > max_char_count ? filelog + (len - max_char_count) : filelog;
 
+  char file_line[8192] = {};
+  int file_len =
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
+             filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
+
+  if (gLogAsync)
+  {
+    int sz = file_len + 1;
+    char* buf = new char[sz];
+    memcpy(buf, file_line, sz);
+
+    gAsyncLogBufferMutex.lock();
+    gAsyncLogBuffer.push_back();
+    gAsyncLogBufferMutex.unlock();
+
+    return;
+  }
+
   // print to console
 #ifdef LOG_TO_CONSOLE
   FILE* stream = stdout;
   if (level == LOG_WARN || level == LOG_ERROR || level == LOG_FATAL)
     stream = stderr;
-  fprintf(stream, "%s[%s] [pid:%d] %s[%s:%d, %s()] %s[%-5s] %s%s\n", COLOR_TIME, timebuf, gPid,
-          color, filelog_shortened, line, func, color, gLogLevelNames[level], msgbuf, COLOR_RESET);
+  fprintf(stream, "%s$s%s\n", COLOR_TIME, file_line, COLOR_RESET);
 #endif
-
-  char file_line[8192] = {};
-  int file_len =
-    snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
-             filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
   pthread_mutex_lock(&gLogMutex);
 
