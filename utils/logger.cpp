@@ -4,7 +4,6 @@
 #include <cstring>
 #include <unistd.h>
 #include <cstdlib>
-#include <pthread.h>
 #include <execinfo.h>
 #include <filesystem>
 
@@ -35,7 +34,7 @@ static std::thread gAsyncThread;
 
 static char* gFileBuf = nullptr;
 static int gFilePos = 0;
-static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex gLogMutex;
 
 void log_flush();
 void check_new_log();
@@ -224,14 +223,9 @@ void check_new_log()
   }
 }
 
-void log_log(LogLevel level, const char* filelog, const char* func, int line, const char* fmt, ...)
+static void log_log_async(LogLevel level, const char* filelog, const char* func, int line,
+                          const char* fmt, va_list args)
 {
-  if (level < gLogMinLevel)
-    return;
-
-  if (!gLogAsync)
-    check_new_log();
-
   time_t t = time(NULL);
   struct tm utc_tm;
   gmtime_r(&t, &utc_tm);
@@ -239,10 +233,7 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
   strftime(timebuf, sizeof(timebuf), "%H:%M:%S", &utc_tm);
 
   char msgbuf[4096] = {};
-  va_list args;
-  va_start(args, fmt);
   vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
-  va_end(args);
 
   const char* color = COLOR_RESET;
   switch (level)
@@ -265,18 +256,50 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
     snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
              filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
-  if (gLogAsync)
+  int sz = file_len + 1;
+  char* buf = new char[sz];
+  memcpy(buf, file_line, sz);
   {
-    int sz = file_len + 1;
-    char* buf = new char[sz];
-    memcpy(buf, file_line, sz);
-    {
-      std::lock_guard<std::mutex> lk(gAsyncMutex);
-      gAsyncLogBuffer.push_back(buf);
-    }
-    gAsyncCond.notify_one();
-    return;
+    std::lock_guard<std::mutex> lk(gAsyncMutex);
+    gAsyncLogBuffer.push_back(buf);
   }
+  gAsyncCond.notify_one();
+}
+
+static void log_log_sync(LogLevel level, const char* filelog, const char* func, int line,
+                         const char* fmt, va_list args)
+{
+  check_new_log();
+
+  time_t t = time(NULL);
+  struct tm utc_tm;
+  gmtime_r(&t, &utc_tm);
+  char timebuf[10] = {};
+  strftime(timebuf, sizeof(timebuf), "%H:%M:%S", &utc_tm);
+
+  char msgbuf[4096] = {};
+  vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
+
+  const char* color = COLOR_RESET;
+  switch (level)
+  {
+    case LOG_TRACE: color = COLOR_TRACE; break;
+    case LOG_DEBUG: color = COLOR_DEBUG; break;
+    case LOG_INFO: color = COLOR_INFO; break;
+    case LOG_WARN: color = COLOR_WARN; break;
+    case LOG_ERROR: color = COLOR_ERROR; break;
+    case LOG_FATAL: color = COLOR_FATAL; break;
+  }
+
+  // cut filename to 15 characters
+  int len = strlen(filelog);
+  int max_char_count = 15;
+  const char* filelog_shortened = len > max_char_count ? filelog + (len - max_char_count) : filelog;
+
+  char file_line[8192] = {};
+  int file_len =
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
+             filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
   // print to console
 #ifdef LOG_TO_CONSOLE
@@ -286,7 +309,7 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
   fprintf(stream, "%s%s%s\n", COLOR_TIME, file_line, COLOR_RESET);
 #endif
 
-  pthread_mutex_lock(&gLogMutex);
+  std::lock_guard<std::mutex> lock(gLogMutex);
 
   FILE* file = gLogFile;
   if (file && file_len > 0)
@@ -304,8 +327,20 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
 #if LOG_AUTO_FLUSH
   log_flush();
 #endif
+}
 
-  pthread_mutex_unlock(&gLogMutex);
+void log_log(LogLevel level, const char* filelog, const char* func, int line, const char* fmt, ...)
+{
+  if (level < gLogMinLevel)
+    return;
+
+  va_list args;
+  va_start(args, fmt);
+  if (gLogAsync)
+    log_log_async(level, filelog, func, line, fmt, args);
+  else
+    log_log_sync(level, filelog, func, line, fmt, args);
+  va_end(args);
 }
 
 void log_backtrace()
