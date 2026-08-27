@@ -1,7 +1,11 @@
 
+<p align="center">
 ![Stats Page](docs/stats_page.PNG)
+<em>sample_http /subtract api</em>
 
 ![Stats Page login](docs/login_stats.PNG)
+<em>auth_server /login api</em>
+</p>
 
 # About
 
@@ -89,6 +93,8 @@ Good prompts for AI:
 - "what are nginx's size limits for http?" - controls size input
 
 - "tuning a libuv tcp server"
+
+- "how fast can database queries and updates range from"
 
 # Good debugging/testing tips
 
