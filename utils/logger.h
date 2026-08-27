@@ -36,7 +36,7 @@ typedef enum
 void log_init(const char* log_dir = ".", LogLevel level = LOG_DEFAULT_LEVEL,
               int flush_cache_sz = 16 * 1024, int log_limit = 30);
 void log_childprocess_init();
-void log_set_async();
+void log_set_async();  // call once before thread setup
 void log_flush();
 void log_backtrace();
 void log_shutdown();

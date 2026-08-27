@@ -34,7 +34,7 @@ static std::thread gAsyncThread;
 
 static char* gFileBuf = nullptr;
 static int gFilePos = 0;
-static std::mutex gLogMutex;
+static std::recursive_mutex gLogMutex;
 
 void log_flush();
 void check_new_log();
@@ -137,22 +137,30 @@ static void log_async_thread(void* userdata)
     for (char* s : local)
       fputs(s, stdout);
 #endif
-    check_new_log();
-    for (char* s : local)
     {
-      size_t len = strlen(s);
-      if (!gLogFile || len == 0)
-        continue;
-      if (gFilePos + (int)len >= gFlushCacheSz)
+      std::lock_guard<std::recursive_mutex> lk(gLogMutex);
+      check_new_log();
+      for (char* s : local)
       {
-        if (gFilePos > 0)
-          log_flush();
-        if ((int)len >= gFlushCacheSz)
+        size_t len = strlen(s);
+        if (!gLogFile || len == 0)
+          continue;
+        if (gFilePos + (int)len >= gFlushCacheSz)
         {
-          lock_file(gLogFile);
-          fwrite(s, 1, len, gLogFile);
-          fflush(gLogFile);
-          unlock_file(gLogFile);
+          if (gFilePos > 0)
+            log_flush();
+          if ((int)len >= gFlushCacheSz)
+          {
+            lock_file(gLogFile);
+            fwrite(s, 1, len, gLogFile);
+            fflush(gLogFile);
+            unlock_file(gLogFile);
+          }
+          else
+          {
+            memcpy(gFileBuf + gFilePos, s, len);
+            gFilePos += (int)len;
+          }
         }
         else
         {
@@ -160,13 +168,8 @@ static void log_async_thread(void* userdata)
           gFilePos += (int)len;
         }
       }
-      else
-      {
-        memcpy(gFileBuf + gFilePos, s, len);
-        gFilePos += (int)len;
-      }
+      log_flush();
     }
-    log_flush();
     for (char* s : local)
       delete[] s;
     last = std::chrono::steady_clock::now();
@@ -184,6 +187,7 @@ void log_set_async()
 
 void log_flush()
 {
+  std::lock_guard<std::recursive_mutex> lk(gLogMutex);
   if (gFilePos > 0 && gLogFile)
   {
     lock_file(gLogFile);
@@ -198,6 +202,7 @@ void log_flush()
 
 void check_new_log()
 {
+  std::lock_guard<std::recursive_mutex> lk(gLogMutex);
   time_t now = time(NULL);
   struct tm utc_tm;
   gmtime_r(&now, &utc_tm);
@@ -269,8 +274,6 @@ static void log_log_async(LogLevel level, const char* filelog, const char* func,
 static void log_log_sync(LogLevel level, const char* filelog, const char* func, int line,
                          const char* fmt, va_list args)
 {
-  check_new_log();
-
   time_t t = time(NULL);
   struct tm utc_tm;
   gmtime_r(&t, &utc_tm);
@@ -309,7 +312,8 @@ static void log_log_sync(LogLevel level, const char* filelog, const char* func, 
   fprintf(stream, "%s%s%s\n", COLOR_TIME, file_line, COLOR_RESET);
 #endif
 
-  std::lock_guard<std::mutex> lock(gLogMutex);
+  std::lock_guard<std::recursive_mutex> lock(gLogMutex);
+  check_new_log();
 
   FILE* file = gLogFile;
   if (file && file_len > 0)
