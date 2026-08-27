@@ -91,6 +91,8 @@ run:
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
+  log_set_async();
+
 #if 0
   {
     // a single server listening on a port intended to serve other internal backend servers
