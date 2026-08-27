@@ -73,6 +73,7 @@ int main(int argc, char* argv[])
         // clang-format off
         /*
         curl -X POST http://localhost:8081/api/v0 -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}'
+        ab -n 10000 -c 10 -p test_http.json -T 'application/json' http://localhost:8081/api/v0
         */
         // clang-format on
         (void)client;
@@ -93,7 +94,7 @@ int main(int argc, char* argv[])
         LOG_INFO("%.2f, %.2f", param1, param2);
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
-        TIMER_END("subtract", false);
+        TIMER_END("subtract", true);
 
         return kJsonRpcSuccess;
       };

@@ -10,6 +10,10 @@
 
 #include <thread>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <chrono>
 
 static LogLevel gLogMinLevel = LOG_DEFAULT_LEVEL;
 static FILE* gLogFile = nullptr;
@@ -23,12 +27,18 @@ static const char* gLogLevelNames[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR"
 
 static bool gLogAsync = false;
 static std::vector<char*> gAsyncLogBuffer;
-static pthread_mutex_t gAsyncLogMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex gAsyncMutex;
+static std::condition_variable gAsyncCond;
+static std::atomic<bool> gAsyncExit{false};
+static constexpr size_t gAsyncBufferLimit = 120;
 static std::thread gAsyncThread;
 
 static char* gFileBuf = nullptr;
 static int gFilePos = 0;
 static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
+
+void log_flush();
+void check_new_log();
 
 #if defined(_WIN32) || defined(_WIN64)
 #define lock_file(fp)   _lock_file(fp)
@@ -81,6 +91,15 @@ void log_init(const char* log_dir, LogLevel level, int flush_cache_sz, int log_l
 
 void log_shutdown()
 {
+  if (gLogAsync)
+  {
+    if (!gAsyncExit.exchange(true))
+      gAsyncCond.notify_all();
+    if (gAsyncThread.joinable())
+      gAsyncThread.join();
+    if (gFilePos > 0 && gLogFile)
+      log_flush();
+  }
   free(gFileBuf);
   gFileBuf = nullptr;
 }
@@ -90,23 +109,75 @@ void log_childprocess_init()
 
 static void log_async_thread(void* userdata)
 {
-  // while (timer exceeded 3s OR bufferlimit reached OR terminate is false)
+  auto last = std::chrono::steady_clock::now();
+  while (true)
   {
-    gAsyncLogMutex.lock();
-
-    // drain from gAsyncLogBuffer and output to console + file
-
-
-    gAsyncLogMutex.unlock();
+    std::vector<char*> local;
+    {
+      std::unique_lock<std::mutex> lk(gAsyncMutex);
+      gAsyncCond.wait_for(
+        lk, std::chrono::seconds(3),
+        [] { return gAsyncExit.load() || gAsyncLogBuffer.size() >= gAsyncBufferLimit; });
+      if (gAsyncExit.load() && gAsyncLogBuffer.empty())
+        break;
+      auto now = std::chrono::steady_clock::now();
+      bool timeout = now - last >= std::chrono::seconds(3);
+      if (gAsyncLogBuffer.empty() && !timeout && !gAsyncExit.load())
+        continue;
+      local.swap(gAsyncLogBuffer);
+    }
+    if (local.empty())
+    {
+      if (gAsyncExit.load())
+        break;
+      continue;
+    }
+#ifdef LOG_TO_CONSOLE
+    for (char* s : local)
+      fputs(s, stdout);
+#endif
+    check_new_log();
+    for (char* s : local)
+    {
+      size_t len = strlen(s);
+      if (!gLogFile || len == 0)
+        continue;
+      if (gFilePos + (int)len >= gFlushCacheSz)
+      {
+        if (gFilePos > 0)
+          log_flush();
+        if ((int)len >= gFlushCacheSz)
+        {
+          lock_file(gLogFile);
+          fwrite(s, 1, len, gLogFile);
+          fflush(gLogFile);
+          unlock_file(gLogFile);
+        }
+        else
+        {
+          memcpy(gFileBuf + gFilePos, s, len);
+          gFilePos += (int)len;
+        }
+      }
+      else
+      {
+        memcpy(gFileBuf + gFilePos, s, len);
+        gFilePos += (int)len;
+      }
+    }
+    log_flush();
+    for (char* s : local)
+      delete[] s;
+    last = std::chrono::steady_clock::now();
   }
 }
 
 void log_set_async()
 {
   if (gLogAsync)
-    return;  // no double-call
+    return;
   gLogAsync = true;
-
+  gAsyncExit.store(false);
   gAsyncThread = std::thread(log_async_thread, nullptr);
 }
 
@@ -197,11 +268,11 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
     int sz = file_len + 1;
     char* buf = new char[sz];
     memcpy(buf, file_line, sz);
-
-    gAsyncLogBufferMutex.lock();
-    gAsyncLogBuffer.push_back();
-    gAsyncLogBufferMutex.unlock();
-
+    {
+      std::lock_guard<std::mutex> lk(gAsyncMutex);
+      gAsyncLogBuffer.push_back(buf);
+    }
+    gAsyncCond.notify_one();
     return;
   }
 
@@ -210,7 +281,7 @@ void log_log(LogLevel level, const char* filelog, const char* func, int line, co
   FILE* stream = stdout;
   if (level == LOG_WARN || level == LOG_ERROR || level == LOG_FATAL)
     stream = stderr;
-  fprintf(stream, "%s$s%s\n", COLOR_TIME, file_line, COLOR_RESET);
+  fprintf(stream, "%s%s%s\n", COLOR_TIME, file_line, COLOR_RESET);
 #endif
 
   pthread_mutex_lock(&gLogMutex);
