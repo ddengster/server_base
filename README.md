@@ -1,11 +1,13 @@
 
-<p align="center">
-![Stats Page](docs/stats_page.PNG)
 <em>sample_http /subtract api</em>
+![Stats Page](docs/stats_page.PNG)
 
-![Stats Page login](docs/login_stats.PNG)
+
+
 <em>auth_server /login api</em>
-</p>
+![Stats Page login](docs/login_stats.PNG)
+
+
 
 # About
 
