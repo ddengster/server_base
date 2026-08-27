@@ -49,6 +49,8 @@ int main(int argc, char* argv[])
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
+  log_set_async();
+
 #if 1
   {
     // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to

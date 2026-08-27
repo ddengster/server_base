@@ -48,13 +48,15 @@ int main(int argc, char* argv[])
   daemon(1, 1);  // detach from controlling terminal
   fork_process_and_keepalive();
 
+  log_set_async();
+
 #if 1
   {
     // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to
     // handle loading balancing between sockets for you. from then on oyu
     setenv("UV_THREADPOOL_SIZE", "8", 1);
 
-    uint num_threads = 1;
+    uint num_threads = 4;
     HTTPServerSettings* settings = new HTTPServerSettings[num_threads];
     uv_thread_t* thread = new uv_thread_t[num_threads];
 
@@ -71,6 +73,7 @@ int main(int argc, char* argv[])
         // clang-format off
         /*
         curl -X POST http://localhost:8081/api/v0 -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}'
+        ab -n 10000 -c 10 -p test_http.json -T 'application/json' http://localhost:8081/api/v0
         */
         // clang-format on
         (void)client;
@@ -87,12 +90,11 @@ int main(int argc, char* argv[])
 
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
-#ifdef NETWORK_DBG
+
         LOG_INFO("%.2f, %.2f", param1, param2);
-#endif
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
-        TIMER_END("subtract", false);
+        TIMER_END("subtract", true);
 
         return kJsonRpcSuccess;
       };
@@ -121,9 +123,8 @@ int main(int argc, char* argv[])
 
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
-#ifdef NETWORK_DBG
+
         LOG_INFO("%.2f, %.2f", param1, param2);
-#endif
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
         yyjson_mut_obj_add_double(*doc, *result, "sum", param1 + param2);
