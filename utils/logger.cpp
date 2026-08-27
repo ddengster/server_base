@@ -102,6 +102,8 @@ void log_shutdown()
   }
   free(gFileBuf);
   gFileBuf = nullptr;
+  if (gLogFile)
+    fclose(gLogFile);
 }
 
 void log_childprocess_init()
@@ -317,7 +319,11 @@ void log_backtrace()
   if (symbols == NULL)
     return;
   if (size == 1)
+  {
+    if (symbols)
+      free(symbols);
     return;
+  }
 
   LOG_WARN("==========backtrace=start==========");
   for (i = 1, j = 0; i < size; ++i, ++j)
