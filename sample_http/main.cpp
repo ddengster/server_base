@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
     // handle loading balancing between sockets for you. from then on oyu
     setenv("UV_THREADPOOL_SIZE", "8", 1);
 
-    uint num_threads = 1;
+    uint num_threads = 4;
     HTTPServerSettings* settings = new HTTPServerSettings[num_threads];
     uv_thread_t* thread = new uv_thread_t[num_threads];
 
@@ -123,9 +123,8 @@ int main(int argc, char* argv[])
 
         double param1 = yyjson_get_num(yyjson_arr_get(params, 0));
         double param2 = yyjson_get_num(yyjson_arr_get(params, 1));
-#ifdef NETWORK_DBG
+
         LOG_INFO("%.2f, %.2f", param1, param2);
-#endif
 
         yyjson_mut_obj_add_double(*doc, *result, "difference", param1 - param2);
         yyjson_mut_obj_add_double(*doc, *result, "sum", param1 + param2);

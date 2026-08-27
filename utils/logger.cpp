@@ -42,9 +42,11 @@ void check_new_log();
 #if defined(_WIN32) || defined(_WIN64)
 #define lock_file(fp)   _lock_file(fp)
 #define unlock_file(fp) _unlock_file(fp)
+#define thread_id()     GetCurrentThreadId()
 #else
 #define lock_file(fp)   flockfile(fp)
 #define unlock_file(fp) funlockfile(fp)
+#define thread_id()     pthread_self()  // std::thread::get_id() doesnt convert efficiently..
 #endif
 
 void delete_logs_beyond(int days_ago);
@@ -258,8 +260,8 @@ static void log_log_async(LogLevel level, const char* filelog, const char* func,
 
   char file_line[8192] = {};
   int file_len =
-    snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
-             filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%lu] [%s:%d, %s()] [%-5s] %s\n", timebuf,
+             (int)thread_id(), filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
   int sz = file_len + 1;
   char* buf = new char[sz];
@@ -301,8 +303,8 @@ static void log_log_sync(LogLevel level, const char* filelog, const char* func, 
 
   char file_line[8192] = {};
   int file_len =
-    snprintf(file_line, sizeof(file_line), "[%s] [pid:%d] [%s:%d, %s()] [%-5s] %s\n", timebuf, gPid,
-             filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%lu] [%s:%d, %s()] [%-5s] %s\n", timebuf,
+             (int)thread_id(), filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
   // print to console
 #ifdef LOG_TO_CONSOLE
