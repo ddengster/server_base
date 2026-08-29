@@ -242,17 +242,6 @@ static void log_log_async(LogLevel level, const char* filelog, const char* func,
   char msgbuf[4096] = {};
   vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
 
-  const char* color = COLOR_RESET;
-  switch (level)
-  {
-    case LOG_TRACE: color = COLOR_TRACE; break;
-    case LOG_DEBUG: color = COLOR_DEBUG; break;
-    case LOG_INFO: color = COLOR_INFO; break;
-    case LOG_WARN: color = COLOR_WARN; break;
-    case LOG_ERROR: color = COLOR_ERROR; break;
-    case LOG_FATAL: color = COLOR_FATAL; break;
-  }
-
   // cut filename to 15 characters
   int len = strlen(filelog);
   int max_char_count = 15;
@@ -260,7 +249,7 @@ static void log_log_async(LogLevel level, const char* filelog, const char* func,
 
   char file_line[8192] = {};
   int file_len =
-    snprintf(file_line, sizeof(file_line), "[%s] [pid:%lu] [%s:%d, %s()] [%-5s] %s\n", timebuf,
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%u] [%s:%d, %s()] [%-5s] %s\n", timebuf,
              (int)thread_id(), filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
 
   int sz = file_len + 1;
@@ -285,6 +274,18 @@ static void log_log_sync(LogLevel level, const char* filelog, const char* func, 
   char msgbuf[4096] = {};
   vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
 
+  // cut filename to 15 characters
+  int len = strlen(filelog);
+  int max_char_count = 15;
+  const char* filelog_shortened = len > max_char_count ? filelog + (len - max_char_count) : filelog;
+
+  char file_line[8192] = {};
+  int file_len =
+    snprintf(file_line, sizeof(file_line), "[%s] [pid:%u] [%s:%d, %s()] [%-5s] %s\n", timebuf,
+             (int)thread_id(), filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
+
+  // print to console
+#ifdef LOG_TO_CONSOLE
   const char* color = COLOR_RESET;
   switch (level)
   {
@@ -295,23 +296,10 @@ static void log_log_sync(LogLevel level, const char* filelog, const char* func, 
     case LOG_ERROR: color = COLOR_ERROR; break;
     case LOG_FATAL: color = COLOR_FATAL; break;
   }
-
-  // cut filename to 15 characters
-  int len = strlen(filelog);
-  int max_char_count = 15;
-  const char* filelog_shortened = len > max_char_count ? filelog + (len - max_char_count) : filelog;
-
-  char file_line[8192] = {};
-  int file_len =
-    snprintf(file_line, sizeof(file_line), "[%s] [pid:%lu] [%s:%d, %s()] [%-5s] %s\n", timebuf,
-             (int)thread_id(), filelog_shortened, line, func, gLogLevelNames[level], msgbuf);
-
-  // print to console
-#ifdef LOG_TO_CONSOLE
   FILE* stream = stdout;
   if (level == LOG_WARN || level == LOG_ERROR || level == LOG_FATAL)
     stream = stderr;
-  fprintf(stream, "%s%s%s\n", COLOR_TIME, file_line, COLOR_RESET);
+  fprintf(stream, "%s%s%s%s\n", COLOR_TIME, color, file_line, COLOR_RESET);
 #endif
 
   std::lock_guard<std::recursive_mutex> lock(gLogMutex);

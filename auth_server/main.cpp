@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include <uv.h>
+#include <postgresql/libpq-fe.h>
 
 #include "os_utils.h"
 #include "logger.h"
@@ -15,6 +16,8 @@
 #include "yyjson.h"
 #include "server_stats.h"
 #include "security.h"
+#include "auth.h"
+#include "db_pool.h"
 
 const char* gProcessName = "auth_server";
 
@@ -50,7 +53,6 @@ int main(int argc, char* argv[])
   fork_process_and_keepalive();
 
   log_set_async();
-
 #if 1
   {
     // 4 threads for event loops, each listening on the same port. SO_REUSEPORT tells the kernel to
@@ -68,53 +70,42 @@ int main(int argc, char* argv[])
       strcpy(settings[i].mJsonRpcPath, "/auth");
       settings[i].ComputeJsonRpcPathHash();
 
-      // must put this behind a reverse proxy that handles SSL and rate limits for you
-      auto login_func = [](uv_stream_t* client, int msgid, yyjson_val* params, int params_count,
-                           yyjson_mut_doc** doc, yyjson_mut_val** result) -> JsonRpcResult
+      settings[i].mInitCallback = [](HTTPServerSettings* s, uv_loop_t* uvloop)
       {
-        // clang-format off
-        /*
-        curl -X POST http://localhost:8081/auth -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "login", "params": ["hashed_pwd"], "id": 1}'
-        ab -n 1000 -c 10 -p test_data.json -T 'application/json' http://localhost:51151/auth
-        */
-        // clang-format on
-        (void)client;
-        (void)msgid;
-        if (params_count != 1)
-          return kJsonRpcInvalidParams;
-        if (yyjson_get_type(yyjson_arr_get(params, 0)) != YYJSON_TYPE_STR)
-          return kJsonRpcInvalidParams;
+        PostgresConnectionPool* pool = new PostgresConnectionPool();
+        pool->InitializeConnections(
+          "host=localhost port=5432 dbname=tn_unyielding user=postgres password=tndb22", 8, uvloop);
+        pool->mPingStr = "host=localhost port=5432";
 
-        TIMER_START();
+        s->mDBConnection = pool;
 
-        // IMPLEMENT THIS: check with the database for user + hashed pwd
-        bool user_access_granted = true;
-        uint userid = 12345;  // retreived from db
+        uv_timer_init(uvloop, &s->mDBCheckTimer);
+        s->mDBCheckTimer.data = s->mDBConnection;
+        uv_timer_start(&s->mDBCheckTimer, &PostgresConnectionPool::CheckConnections_TimerCb, 0,
+                       3000);
 
-        //  issue a JWT Token
-        if (!user_access_granted)
-          return kJsonRpcInternalError;
-
-        const char* access_token = GenerateSignedJWT(userid);
-        if (!access_token)
-          return kJsonRpcInternalError;
-#ifdef NETWORK_DBG
-        LOG_INFO(access_token);
-#endif
-
-        *doc = yyjson_mut_doc_new(NULL);
-        *result = yyjson_mut_obj(*doc);
-
-        yyjson_mut_obj_add_str(*doc, *result, "access_token", access_token);
-        yyjson_mut_obj_add_str(*doc, *result, "token_type", "Bearer");
-        //@note: if this were a proper web browser request you put the access token in the
-        // http response Set-Cookie header.
-
-        TIMER_END("login", false);
-
-        return kJsonRpcSuccess;
+        // periodic timer to step this server's coroutines
+        uv_timer_init(uvloop, &s->mCoroutineTimer);
+        s->mCoroutineTimer.data = s;
+        uv_timer_start(&s->mCoroutineTimer, &HTTPServerSettings::CoroutineTimerCB, 0, 1);
       };
-      settings[i].mRpcCallbacks.emplace(Hash("login"), login_func);
+      settings[i].mShutdownCallback = [](HTTPServerSettings* s, uv_loop_t*)
+      {
+        uv_close((uv_handle_t*)&s->mCoroutineTimer, nullptr);
+        uv_close((uv_handle_t*)&s->mDBCheckTimer, nullptr);
+        s->mCoroutines.DestroyAllCoroutines();
+
+        auto pool = (PostgresConnectionPool*)s->mDBConnection;
+        if (pool)
+        {
+          pool->ShutdownConnections();
+          delete pool;
+        }
+        s->mDBConnection = nullptr;
+      };
+
+      settings[i].mRpcCallbacks.emplace(Hash("login"), auth_login);
+      settings[i].mRpcCallbacks.emplace(Hash("register"), auth_register);
 
       // restricted endpoint
       auto restricted_func = [](uv_stream_t* client, int msgid, yyjson_val* params,
@@ -219,5 +210,6 @@ int main(int argc, char* argv[])
     delete[] thread;
   }
 #endif
+
   return 0;
 }

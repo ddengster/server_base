@@ -4,7 +4,7 @@
 
 
 
-<em>auth_server /login api</em>
+<em>auth_server /login api, with coroutines running, database checks & updates</em>
 ![Stats Page login](docs/login_stats.PNG)
 
 
@@ -25,7 +25,7 @@ Dependency on libuv for timers, sockets/udp/tcp, event loops and threading.
 
 - sample_http_server: Sample http server supporting only [JSONRPC](https://www.jsonrpc.org/) capability
 
-- auth_server: Sample authentication server with login endpoint and restricted endpoint, using JWT for authentication
+- auth_server: Sample authentication server with login endpoint and restricted endpoint, using JWT for authentication, libpq connection to database, coroutines
 
 - prometheous_test: sample server endpoint for prometheus monitoring tools
 
@@ -39,7 +39,9 @@ Development with WSL
 
 Linux
 
-- `apt-get` packages: g++, make, build-essentials, libuv1-dev, [libjwt-dev](https://github.com/benmcollins/libjwt) (for `auth_server`)
+- `apt-get` packages: g++, make, build-essentials, libuv1-dev
+
+- for `auth_server`: libpq and [libjwt-dev](https://github.com/benmcollins/libjwt), `apt-get postgresql` for database, Then run db script in `auth_server/db_scripts` like so: `psql -U postgres -h localhost -d postgres -f db_scripts/reset_and_seed.sql`
 
 - `apt-get install libuv1-dbgsym` for debugging libuv
 
