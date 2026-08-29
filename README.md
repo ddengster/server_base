@@ -115,3 +115,7 @@ Good prompts for AI:
 - Prompt "libuv event loop", ask what function calls map to what parts of the loop. Notably, the Poll I/O dynamically calculates a timeout
 
 - [Why no stack allocation for receiving buffer](https://groups.google.com/g/libuv/c/fRNQV_QGgaA)
+
+# License
+
+Public Domain
