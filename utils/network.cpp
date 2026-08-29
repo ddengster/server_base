@@ -39,7 +39,7 @@ void tcp_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
     if (nread != UV_EOF)
       LOG_WARN("Read error %s\n", uv_strerror(nread));
 
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
   }
   if (buf->base)
     free(buf->base);
@@ -63,31 +63,10 @@ void tcp_on_new_connection(uv_stream_t* server, int status)
     uv_read_start((uv_stream_t*)client, on_alloc, tcp_on_read);
   }
   else
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
 }
 
-void tcp_server_setup(uv_loop_t* loop, TCPServerSettings* settings)
-{
-  uv_tcp_t* server = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
-  uv_tcp_init(loop, server);
-  uv_tcp_simultaneous_accepts(server, 1);
-  uv_tcp_nodelay(server, 1);
-  server->data = settings;
-
-  struct sockaddr_in addr;
-  uv_ip4_addr(settings->mIPAddress, settings->mPort, &addr);
-
-  uv_tcp_bind(server, (const struct sockaddr*)&addr, SO_REUSEPORT);
-
-  int r = uv_listen((uv_stream_t*)server, settings->mBacklogQueueSz, tcp_on_new_connection);
-  if (r)
-  {
-    LOG_WARN("Listen error %s\n", uv_strerror(r));
-    return;
-  }
-}
-
-void server_thread_func(void* userdata)
+void tcp_server_thread_func(void* userdata)
 {
   auto server_settings = (TCPServerSettings*)userdata;
 
@@ -121,6 +100,27 @@ void server_thread_func(void* userdata)
   uv_loop_close(&loop);
 }
 
+void tcp_server_setup(uv_loop_t* loop, TCPServerSettings* settings)
+{
+  uv_tcp_t* server = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+  uv_tcp_init(loop, server);
+  uv_tcp_simultaneous_accepts(server, 1);
+  uv_tcp_nodelay(server, 1);
+  server->data = settings;
+
+  struct sockaddr_in addr;
+  uv_ip4_addr(settings->mIPAddress, settings->mPort, &addr);
+
+  uv_tcp_bind(server, (const struct sockaddr*)&addr, SO_REUSEPORT);
+
+  int r = uv_listen((uv_stream_t*)server, settings->mBacklogQueueSz, tcp_on_new_connection);
+  if (r)
+  {
+    LOG_WARN("Listen error %s\n", uv_strerror(r));
+    return;
+  }
+}
+
 void common_write_end_cb(uv_write_t* req, int status)
 {
   if (status < 0)
@@ -132,6 +132,8 @@ void common_write_end_cb(uv_write_t* req, int status)
 
 void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int* id)
 {
+  if (!uv_is_writable(client))
+    return;
   //@note: prompt "json rpc errors" for error codes
   yyjson_mut_doc* doc = yyjson_mut_doc_new(NULL);
   yyjson_mut_val* root = yyjson_mut_obj(doc);
@@ -179,6 +181,8 @@ void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int*
 void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
                            yyjson_mut_val* result)
 {
+  if (!uv_is_writable(client))
+    return;
   yyjson_mut_val* root = yyjson_mut_obj(doc);
   yyjson_mut_doc_set_root(doc, root);
 
@@ -226,7 +230,7 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
   {
     LOG_WARN("JSON-RPC: parse error\n");
     send_jsonrpc_error(client, kJsonRpcParseError, "Parse error", nullptr);
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
     return;
   }
 
@@ -245,7 +249,7 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
   {
     LOG_WARN("JSON-RPC: invalid request\n");
     send_jsonrpc_error(client, kJsonRpcParseError, "Parse Error", msg_id);
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
     yyjson_doc_free(doc);
     return;
   }
@@ -274,19 +278,19 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
       {
         send_jsonrpc_response(client, msg_id, result_doc, result);
         yyjson_mut_doc_free(result_doc);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        SAFE_UV_CLOSE(client, free);
       }
       else if (ret == kJsonRpcInvalidParams)
       {
         char errmsg[64] = {};
         snprintf(errmsg, sizeof(errmsg), "Invalid params");
         send_jsonrpc_error(client, kJsonRpcInvalidParams, errmsg, msg_id);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        SAFE_UV_CLOSE(client, free);
       }
       else if (ret == kJsonRpcInternalError)
       {
         send_jsonrpc_error(client, kJsonRpcServerError, "Internal error", msg_id);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        SAFE_UV_CLOSE(client, free);
       }
       else if (ret == kJsonRpcInternalPending)
       {
@@ -297,14 +301,14 @@ static void handle_jsonrpc_request(uv_stream_t* client, const char* body, size_t
       else
       {
         send_jsonrpc_error(client, ret, "Internal error", msg_id);
-        uv_close((uv_handle_t*)client, (uv_close_cb)free);
+        SAFE_UV_CLOSE(client, free);
       }
     }
   }
   else
   {
     send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Method not found", msg_id);
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
   }
 
   free(params_str);
@@ -350,7 +354,7 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
         if (cb)
         {
           cb(client);
-          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+          SAFE_UV_CLOSE(client, free);
         }
       }
       else
@@ -360,7 +364,7 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
         {
           send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Incorrect HTTP method (use POST)",
                              nullptr);
-          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+          SAFE_UV_CLOSE(client, free);
         }
         else
 #endif
@@ -376,7 +380,7 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
           LOG_WARN("Wrong path");
 #endif
           send_jsonrpc_error(client, kJsonRpcMethodNotFound, "Wrong Path", nullptr);
-          uv_close((uv_handle_t*)client, (uv_close_cb)free);
+          SAFE_UV_CLOSE(client, free);
         }
       }
     }
@@ -384,14 +388,14 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
     {
       LOG_WARN("Error parsing http request: %d", pret);
       send_jsonrpc_error(client, kJsonRpcParseError, "Parse error", nullptr);
-      uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      SAFE_UV_CLOSE(client, free);
     }
     else if (pret <= -2)
     {
       LOG_WARN("Partial request, replying them to send below %d size", MAX_PACKET_SIZE);
       send_jsonrpc_error(client, kJsonRpcServerError,
                          "Server Error (Sz), try downsizing your packages", nullptr);
-      uv_close((uv_handle_t*)client, (uv_close_cb)free);
+      SAFE_UV_CLOSE(client, free);
     }
   }
   else if (nread < 0)
@@ -399,7 +403,7 @@ void http_on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
     if (nread != UV_EOF)
       LOG_WARN("Read error %s\n", uv_strerror(nread));
 
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
   }
   if (buf->base)
     free(buf->base);
@@ -423,9 +427,16 @@ void http_on_new_connection(uv_stream_t* server, int status)
     uv_read_start((uv_stream_t*)client, on_alloc, http_on_read);
   }
   else
-    uv_close((uv_handle_t*)client, (uv_close_cb)free);
+    SAFE_UV_CLOSE(client, free);
 }
 
+void HTTPServerSettings::CoroutineTimerCB(uv_timer_t* timer)
+{
+  auto server_settings = (HTTPServerSettings*)timer->data;
+
+  server_settings->mCoroutines.StepCoroutines();
+  server_settings->mCoroutines.CleanupDeadCoroutines();
+}
 
 void http_server_thread_func(void* userdata)
 {
@@ -456,7 +467,13 @@ void http_server_thread_func(void* userdata)
     return;
   }
 
+  if (server_settings->mInitCallback)
+    server_settings->mInitCallback(server_settings, &loop);
+
   uv_run(&loop, UV_RUN_DEFAULT);
+
+  if (server_settings->mShutdownCallback)
+    server_settings->mShutdownCallback(server_settings, &loop);
 
   uv_loop_close(&loop);
 }

@@ -156,7 +156,7 @@ run:
       settings[i].mIPAddress = "127.0.0.1";
       settings[i].mPort = 8081;
       settings[i].mDataRecvCallback = server_tcp_callback;
-      uv_thread_create(&thread[i], server_thread_func, &settings[i]);
+      uv_thread_create(&thread[i], tcp_server_thread_func, &settings[i]);
     }
 
     for (uint i = 0; i < num_threads; ++i)
