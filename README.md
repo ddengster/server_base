@@ -4,7 +4,7 @@
 
 
 
-<em>auth_server /login api, with coroutines running, database checks & updates</em>
+<em>auth_server /login api, with coroutines running, database checks & updates, 550 login requests/s</em>
 ![Stats Page login](docs/login_stats.PNG)
 
 
