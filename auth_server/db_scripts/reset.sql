@@ -3,7 +3,6 @@
 --   (connect to the 'postgres' maintenance database; this script creates
 --    the app database if it does not exist, then switches to it)
 -- Idempotent: safe to re-run.
--- Override the database name with: psql -d postgres -v appdb=mydb -f db_scripts/reset.sql
 
 \set appdb 'tn_unyielding'
 
