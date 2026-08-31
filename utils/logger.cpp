@@ -112,6 +112,7 @@ void log_childprocess_init()
 
 static void log_async_thread(void* userdata)
 {
+  (void)userdata;
   auto last = std::chrono::steady_clock::now();
   while (true)
   {
