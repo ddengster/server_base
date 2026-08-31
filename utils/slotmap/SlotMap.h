@@ -122,7 +122,7 @@ public:
   // helper for iteration, remember to check for nullptr
   T* operator[](uint index)
   {
-    if (index > mData.size())
+    if (index >= mData.size())
       return nullptr;
 
     T* ret = &mData[index];
