@@ -60,7 +60,8 @@ void on_write(uv_write_t* req, int status)
   {
     LOG("Message sent to server successfully.");
   }
-  // Free the write request container
+  // Free the write buffer (kept in req->data) and the write request container
+  free(req->data);
   free(req);
 }
 
@@ -89,10 +90,13 @@ void on_connect(uv_connect_t* req, int status)
   uv_buf_t buffer = uv_buf_init(b, strlen(message) + 1);
 
   uv_write_t* write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
+  write_req->data = b;  // freed in on_write
   int result = uv_write(write_req, stream, &buffer, 1, on_write);
   if (result < 0)
   {
     LOG_WARN("Failed to initiate write: %s", uv_err_name(result));
+    free(write_req->data);
+    free(write_req);
   }
 }
 

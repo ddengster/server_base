@@ -140,6 +140,8 @@ JsonRpcResult auth_login(uv_stream_t* client, int msgid, yyjson_val* params, int
 
           yyjson_mut_doc_free(result_doc);
         }
+        // free the string returned by GenerateSignedJWT (allocated via jwt_encode_str)
+        free((void*)access_token);
       }
       else
       {

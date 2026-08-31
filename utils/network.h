@@ -38,6 +38,7 @@ void tcp_server_setup(uv_loop_t* loop, TCPServerSettings* settings);
 /**
  * Common functions
  */
+
 // common 'end' callbacks
 void common_write_end_cb(uv_write_t* req, int status);
 
