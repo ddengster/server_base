@@ -33,7 +33,8 @@ void PostgresConnectionPool::InitializeConnections(const char* connection_str, i
     {
       PQsetnonblocking(conn, 1);  // swap to async
       // register interest in the loop, do not start it yet
-      uv_poll_init(uvloop, &mConnections[i].mPollData, PQsocket(conn));
+      mConnections[i].mPollData = new uv_poll_t();
+      uv_poll_init(uvloop, mConnections[i].mPollData, PQsocket(conn));
       ++i;
     }
   }
@@ -43,8 +44,14 @@ void PostgresConnectionPool::ShutdownConnections()
 {
   for (int i = 0; i < mNumConnections; ++i)
   {
-    uv_poll_stop(&mConnections[i].mPollData);
-    PQfinish(mConnections[i].mConn);
+    if (mConnections[i].mPollData)
+    {
+      uv_poll_stop(mConnections[i].mPollData);
+      SAFE_UV_CLOSE(mConnections[i].mPollData, free);
+      mConnections[i].mPollData = nullptr;
+    }
+    if (mConnections[i].mConn)
+      PQfinish(mConnections[i].mConn);
   }
 
   delete[] mConnections;
@@ -146,9 +153,18 @@ void PostgresConnectionPool::CheckConnections_TimerCb(uv_timer_t* timer)
     {
       DBConnectionCtx* ctx = &db_pool->mConnections[i];
 
+      // tear down the previous poll handle before replacing it with a fresh one.
+      // a poll handle cannot be re-initialized in place with a new fd, so we
+      // close the old handle and allocate a new one on each reconnect.
+      if (ctx->mPollData)
+      {
+        uv_poll_stop(ctx->mPollData);
+        SAFE_UV_CLOSE(ctx->mPollData, free);
+        ctx->mPollData = nullptr;
+      }
+
       if (ctx->mConn)
       {
-        uv_poll_stop(&ctx->mPollData);
         PQfinish(ctx->mConn);
         ctx->mConn = nullptr;
       }
@@ -166,8 +182,9 @@ void PostgresConnectionPool::CheckConnections_TimerCb(uv_timer_t* timer)
       else
       {
         PQsetnonblocking(ctx->mConn, 1);  // swap to async
+        ctx->mPollData = new uv_poll_t();
         // register interest in the loop, do not start it yet
-        uv_poll_init(timer->loop, &ctx->mPollData, PQsocket(ctx->mConn));
+        uv_poll_init(timer->loop, ctx->mPollData, PQsocket(ctx->mConn));
 
         ctx->ResetFlags();
         ctx->mReconnectPhase = false;
@@ -198,8 +215,8 @@ DBConnectionCtx* yield_until_db_ctx_or_time_limit(void* pool, uv_stream_t* strea
 void start_poll_and_yield_until_polldata(DBConnectionCtx* db_ctx)
 {
   // activate polling for this connection during the Poll for I/O phase
-  db_ctx->mPollData.data = (void*)db_ctx;
-  uv_poll_start(&db_ctx->mPollData, UV_READABLE, &PostgresConnectionPool::Poll_Callback);
+  db_ctx->mPollData->data = (void*)db_ctx;
+  uv_poll_start(db_ctx->mPollData, UV_READABLE, &PostgresConnectionPool::Poll_Callback);
 
   yield_until_true([](void* db_ctx) { return ((DBConnectionCtx*)db_ctx)->DonePollingData(); },
                    db_ctx);
