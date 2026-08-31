@@ -210,7 +210,8 @@ int PQsendQueryParamsIgnoreResults(DBConnectionCtx* db_ctx, PGconn* conn, const 
                                    const char* const* paramValues, const int* paramLengths,
                                    const int* paramFormats, int resultFormat)
 {
-  int update_res = PQsendQueryParams(conn, command, 1, NULL, paramValues, NULL, NULL, 0);
+  int update_res = PQsendQueryParams(conn, command, nParams, paramTypes, paramValues, paramLengths,
+                                     paramFormats, resultFormat);
   if (update_res != 0)
   {
     start_poll_and_yield_until_polldata(db_ctx);
