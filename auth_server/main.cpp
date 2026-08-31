@@ -181,7 +181,11 @@ int main(int argc, char* argv[])
                                     "%s\r\n",
                                     len, buffer);
 
+        // clamp to what was actually written into 'response' to avoid over-reading
+        // the stack buffer when snprintf reported a would-be length >= sizeof(response)
         size_t sz = (size_t)response_len + 1;
+        if (sz > sizeof(response))
+          sz = sizeof(response);
         char* b = (char*)malloc(sz);
         memset(b, 0, sz);
         strncpy(b, response, sz);
