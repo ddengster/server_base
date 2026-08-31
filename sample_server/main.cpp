@@ -107,7 +107,7 @@ run:
         message = "number ok\n";
 
       uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-      req->data = client;
+      req->data = nullptr;  // 'message' is a static string literal, nothing to free
 
       uv_buf_t sendbuf = uv_buf_init((char*)message, strlen(message));
       int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
@@ -136,7 +136,7 @@ run:
         message = "number ok\n";
 
       uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-      req->data = client;
+      req->data = nullptr;  // 'message' is a static string literal, nothing to free
 
       uv_buf_t sendbuf = uv_buf_init((char*)message, strlen(message));
       int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);

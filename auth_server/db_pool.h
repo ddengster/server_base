@@ -28,7 +28,9 @@ struct DBConnectionCtx
 {
   PGconn* mConn = nullptr;
   uv_stream_t* mStream = nullptr;
-  uv_poll_t mPollData;
+  // heap-allocated so the handle can be closed & replaced on reconnect
+  // (uv_poll_t must not be re-initialized in place with a new fd)
+  uv_poll_t* mPollData = nullptr;
   bool mInUse = false;
   bool mDataReady = false;
   bool mTerminate = false;  // for db polling errors, stop coroutines immediately

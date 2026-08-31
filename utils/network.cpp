@@ -126,7 +126,9 @@ void common_write_end_cb(uv_write_t* req, int status)
   if (status < 0)
     LOG_WARN("Write error: %s\n", uv_strerror(status));
 
-  // Free the request memory allocated in the write call
+  // Free the write buffer kept in req->data (may be nullptr for static strings).
+  // libuv does not copy the write buffer, so it must be released here.
+  free(req->data);
   free(req);
 }
 
@@ -163,17 +165,18 @@ void send_jsonrpc_error(uv_stream_t* client, int code, const char* message, int*
                      json_len, json);
   free(json);
 
-  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-  req->data = client;
-
   char* b = (char*)malloc(len + 1);
   strncpy(b, buf, (size_t)len + 1);
+
+  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+  req->data = b;
 
   uv_buf_t sendbuf = uv_buf_init(b, len + 1);
   int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
   if (result < 0)
   {
     LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result));
+    free(b);
     free(req);
   }
 }
@@ -207,17 +210,18 @@ void send_jsonrpc_response(uv_stream_t* client, int* id, yyjson_mut_doc* doc,
                      json_len, json);
   free(json);
 
-  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-  req->data = client;
-
   char* b = (char*)malloc((size_t)len + 1);
   strncpy(b, buf, (size_t)len + 1);
+
+  uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+  req->data = b;
 
   uv_buf_t sendbuf = uv_buf_init(b, (size_t)len + 1);
   int result_code = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
   if (result_code < 0)
   {
     LOG_WARN("Failed to initiate write: %s\n", uv_strerror(result_code));
+    free(b);
     free(req);
   }
 }

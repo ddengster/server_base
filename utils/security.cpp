@@ -46,8 +46,8 @@ bool VerifySignedJWT(const char* token_str, int* userid, bool* expired)
 
   if (expired)
   {
-    long iat = (int)jwt_get_grant_int(jwt, "iat");
-    long exp = (int)jwt_get_grant_int(jwt, "exp");
+    long iat = jwt_get_grant_int(jwt, "iat");
+    long exp = jwt_get_grant_int(jwt, "exp");
     long expire_time = iat + exp;
     *expired = ((long)time(NULL) >= expire_time) ? true : false;
   }

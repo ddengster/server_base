@@ -233,19 +233,24 @@ int main(int argc, char* argv[])
                                     "%s\r\n",
                                     len, buffer);
 
-        uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
-        req->data = client;
-
+        // clamp to what was actually written into 'response' to avoid over-reading
+        // the stack buffer when snprintf reported a would-be length >= sizeof(response)
         size_t sz = (size_t)response_len + 1;
+        if (sz > sizeof(response))
+          sz = sizeof(response);
         char* b = (char*)malloc(sz);
         memset(b, 0, sz);
         strncpy(b, response, sz);
+
+        uv_write_t* req = (uv_write_t*)malloc(sizeof(uv_write_t));
+        req->data = b;
 
         uv_buf_t sendbuf = uv_buf_init(b, sz);
         int result = uv_write(req, client, &sendbuf, 1, common_write_end_cb);
         if (result < 0)
         {
           LOG_WARN("stats: failed to initiate write: %s\n", uv_strerror(result));
+          free(b);
           free(req);
         }
         return result;

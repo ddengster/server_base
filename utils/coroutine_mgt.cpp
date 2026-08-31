@@ -14,7 +14,8 @@ CoroutineManager::~CoroutineManager()
 { DestroyAllCoroutines(); }
 
 void CoroutineManager::CreateUntrackedCoroutine(void (*co_func)(mco_coro*),
-                                                uv_stream_t* clientstream, void* user_data)
+                                                uv_stream_t* clientstream, void* user_data,
+                                                void (*user_data_free_cb)(void*))
 {
   mco_desc desc = mco_desc_init(co_func, 0);
   desc.user_data = user_data;
@@ -26,6 +27,7 @@ void CoroutineManager::CreateUntrackedCoroutine(void (*co_func)(mco_coro*),
   Coro2 c;
   c.mCoro = coro;
   c.mStream = clientstream;
+  c.mUserDataFreeCb = user_data_free_cb;
   mUntrackedCoroutines.push_back(c);
 }
 
@@ -94,6 +96,8 @@ void CoroutineManager::CleanupDeadCoroutines()
     Coro2& coro = mUntrackedCoroutines[i];
     if (coro.mCoro && mco_status(coro.mCoro) == MCO_DEAD)
     {
+      if (coro.mUserDataFreeCb && coro.mCoro->user_data)
+        coro.mUserDataFreeCb(coro.mCoro->user_data);
       mco_destroy(coro.mCoro);
       SAFE_UV_CLOSE(coro.mStream, free);
       //@todo: swap&erase?
@@ -119,8 +123,11 @@ void CoroutineManager::DestroyAllCoroutines()
 
   for (uint i = 0; i < mUntrackedCoroutines.size(); ++i)
   {
-    mco_destroy(mUntrackedCoroutines[i].mCoro);
-    SAFE_UV_CLOSE(mUntrackedCoroutines[i].mStream, free);
+    Coro2& coro = mUntrackedCoroutines[i];
+    if (coro.mUserDataFreeCb && coro.mCoro && coro.mCoro->user_data)
+      coro.mUserDataFreeCb(coro.mCoro->user_data);
+    mco_destroy(coro.mCoro);
+    SAFE_UV_CLOSE(coro.mStream, free);
   }
   mUntrackedCoroutines.clear();
 }
