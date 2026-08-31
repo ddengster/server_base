@@ -35,9 +35,12 @@ public:
   CoroutineManager() {}
   ~CoroutineManager();
 
-  // non-interactive coroutine. clientstream is closed upon coroutine death
+  // non-interactive coroutine. clientstream is closed upon coroutine death.
+  // user_data is owned by the coroutine manager and freed via user_data_free_cb
+  // when the coroutine is reaped (may be nullptr if user_data needs no cleanup)
   void CreateUntrackedCoroutine(void (*co_func)(mco_coro*), uv_stream_t* clientstream,
-                                void* user_data = nullptr);
+                                void* user_data = nullptr,
+                                void (*user_data_free_cb)(void*) = nullptr);
 
   // coroutine that you can lookup from external
   ObjectHandle CreateManagedCoroutine(void (*co_func)(mco_coro*), void* user_data = nullptr,
@@ -70,6 +73,7 @@ private:
   {
     mco_coro* mCoro = nullptr;
     uv_stream_t* mStream = nullptr;
+    void (*mUserDataFreeCb)(void*) = nullptr;
   };
 
   std::vector<Coro2> mUntrackedCoroutines;

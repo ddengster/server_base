@@ -47,7 +47,9 @@ JsonRpcResult auth_login(uv_stream_t* client, int msgid, yyjson_val* params, int
     TIMER_START();
     auto data = (AuthLoginData*)coro->user_data;
     if (uv_is_closing((const uv_handle_t*)data->mClient))
+    {
       return;
+    }
 
     auto server_settings = (HTTPServerSettings*)data->mClient->data;
     auto dbpool = (PostgresConnectionPool*)server_settings->mDBConnection;
@@ -176,7 +178,6 @@ JsonRpcResult auth_login(uv_stream_t* client, int msgid, yyjson_val* params, int
       dbpool->ReleaseDBConn(db_ctx);
     }
 
-    delete data;
     TIMER_END("login", true);
   };
 
@@ -199,7 +200,8 @@ JsonRpcResult auth_login(uv_stream_t* client, int msgid, yyjson_val* params, int
   }
 
   auto server_settings = (HTTPServerSettings*)client->data;
-  server_settings->mCoroutines.CreateUntrackedCoroutine(auth_login_coro, client, data);
+  server_settings->mCoroutines.CreateUntrackedCoroutine(auth_login_coro, client, data,
+                                                        [](void* p) { delete (AuthLoginData*)p; });
 
   return kJsonRpcInternalPending;
 }
@@ -239,7 +241,9 @@ JsonRpcResult auth_register(uv_stream_t* client, int msgid, yyjson_val* params, 
   {
     auto data = (AuthRegisterData*)coro->user_data;
     if (uv_is_closing((const uv_handle_t*)data->mClient))
+    {
       return;
+    }
     auto server_settings = (HTTPServerSettings*)data->mClient->data;
     auto dbpool = (PostgresConnectionPool*)server_settings->mDBConnection;
 
@@ -335,7 +339,6 @@ JsonRpcResult auth_register(uv_stream_t* client, int msgid, yyjson_val* params, 
 
       yyjson_mut_doc_free(result_doc);
     }
-    delete data;
   };
 
   AuthRegisterData* data = new AuthRegisterData();
@@ -391,7 +394,8 @@ JsonRpcResult auth_register(uv_stream_t* client, int msgid, yyjson_val* params, 
   }
 
   auto server_settings = (HTTPServerSettings*)client->data;
-  server_settings->mCoroutines.CreateUntrackedCoroutine(register_coro, client, data);
+  server_settings->mCoroutines.CreateUntrackedCoroutine(register_coro, client, data,
+                                                        [](void* p) { delete (AuthRegisterData*)p; });
 
   TIMER_END("register", false);
   return kJsonRpcInternalPending;
